@@ -77,7 +77,9 @@ public partial class MainWindow : Window
         var renderer = Path.Combine(AppContext.BaseDirectory, "Renderer");
         Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "app.goldbar", renderer, CoreWebView2HostResourceAccessKind.DenyCors);
-        Web.Source = new Uri("https://app.goldbar/index.html");
+        // Unique query param forces WebView2 to re-read Renderer files from disk
+        // instead of serving stale cached copies after an update.
+        Web.Source = new Uri($"https://app.goldbar/index.html?v={Environment.ProcessId}");
 
         if (_settings.AutoRead && !_runUiSelfTest)
             await _scale.ConnectAsync(_settings);
