@@ -303,13 +303,17 @@
     const style = document.createElement('style');
     style.textContent = `
       .workspace-body.full-center{grid-template-columns:1fr!important}
-      .page-host{display:none;min-height:100%;padding:2px 0 28px}
-      .page-host.active{display:block}
+      .page-host{display:none;height:100%;padding:2px 0 28px}
+      .page-host.active{display:block;overflow-y:auto!important;overflow-x:hidden!important;padding-left:8px;scrollbar-gutter:stable;overscroll-behavior:contain}
+      .page-host.active::-webkit-scrollbar{width:8px}
+      .page-host.active::-webkit-scrollbar-track{background:rgba(255,255,255,.025);border-radius:10px}
+      .page-host.active::-webkit-scrollbar-thumb{background:rgba(242,185,28,.38);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+      .page-host.active::-webkit-scrollbar-thumb:hover{background:rgba(242,185,28,.58);background-clip:padding-box}
       .page-panel{background:var(--panel,#15171c);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:22px;margin-bottom:18px}
       .page-panel h2,.page-panel h3{margin:0 0 16px;color:#f4f1e9;font-weight:800}
       .page-muted{color:#9ca3af;font-weight:700}
       .melts-table{width:100%;border-collapse:separate;border-spacing:0 8px;direction:rtl}
-      .melts-table th{color:#aeb4c0;font-size:13px;padding:8px;text-align:center}
+      .melts-table th{color:#aeb4c0;font-size:13px;padding:8px;text-align:center;position:sticky;top:0;background:var(--panel,#15171c);z-index:1}
       .melts-table td{background:rgba(255,255,255,.035);padding:13px 10px;text-align:center;font-weight:700}
       .melts-table tr td:first-child{border-radius:0 12px 12px 0}.melts-table tr td:last-child{border-radius:12px 0 0 12px}
       .danger-mini{border:1px solid rgba(255,90,90,.35);background:rgba(255,90,90,.08);color:#ff8d8d;border-radius:10px;padding:7px 12px;cursor:pointer;font-weight:800}
