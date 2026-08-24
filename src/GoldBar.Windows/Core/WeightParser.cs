@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 namespace GoldBar.Windows.Core;
 
@@ -7,81 +7,35 @@ namespace GoldBar.Windows.Core;
 /// Extracts a numeric weight from common ASCII scale frames such as:
 /// ST,+ 214.373 g / WT=102,500 / +000214.373.
 /// The last numeric field is used because status fields normally precede weight.
-/// 
-/// Optimized with manual parsing for high-frequency readings.
 /// </summary>
 public static partial class WeightParser
 {
+    [GeneratedRegex(@"[-+]?\s*\d+(?:[\.,]\d+)?", RegexOptions.CultureInvariant)]
+    private static partial Regex NumberRegex();
+
     public static double? Parse(string? raw, int decimals)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
-        // Find the last numeric token: a contiguous sequence of digits,
-        // optionally with a leading decimal separator and/or leading sign.
-        
-        var i = raw.Length - 1;
-        
-        // Step 1: Find the last digit
-        while (i >= 0 && !IsDigit(raw[i])) i--;
-        if (i < 0) return null;
-        
-        // Step 2: Scan left through digits and decimal separators (dots/commas)
-        var end = i + 1;
-        while (i >= 0 && (IsDigit(raw[i]) || IsDecimalSeparator(raw[i]))) i--;
-        
-        // Step 3: Check for optional leading sign (+/-)
-        if (i >= 0 && (raw[i] == '+' || raw[i] == '-'))
-        {
-            // Only include sign if it's immediately before the number (no whitespace gap)
-            if (i + 1 < end && raw[i + 1] != ' ' && raw[i + 1] != '\t')
-                i--;
-        }
-        
-        var start = i + 1;
-        if (start >= end) return null;
-        
-        // Step 4: Extract and parse the number
-        var len = end - start;
-        Span<char> buffer = stackalloc char[len];
-        var pos = 0;
-        
-        for (var j = start; j < end; j++)
-        {
-            var c = raw[j];
-            if (c == ' ' || c == '\t')
-                continue; // Skip whitespace within number
-            if (c == '.' || c == ',' || c == '٫') // Decimal separators
-                buffer[pos++] = '.';
-            else if (c == '+' || c == '-')
-                buffer[pos++] = c;
-            else if (c >= '0' && c <= '9')
-                buffer[pos++] = c;
-            else
-                return null; // Invalid character
-        }
-        
-        if (pos == 0) return null;
-        
-        if (!double.TryParse(buffer[..pos], 
-            NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
-            CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value))
+        var matches = NumberRegex().Matches(raw);
+        if (matches.Count == 0) return null;
+
+        var token = matches[^1].Value
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("\t", string.Empty, StringComparison.Ordinal)
+            .Replace(',', '.');
+
+        if (!double.TryParse(token, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value))
             return null;
 
         return Math.Round(value, Math.Clamp(decimals, 0, 6), MidpointRounding.AwayFromZero);
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsDigit(char c) => c >= '0' && c <= '9';
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsDecimalSeparator(char c) =>
-        c == '.' || c == ',' || c == '٫';
 }
 
-/// <summary>
-/// Median stabilizer for smoothing rapid scale readings.
-/// Retained for backward compatibility and optional use.
-/// </summary>
+// Retained as a generic helper for diagnostics/backward compatibility. The live scale
+// path intentionally does not median-filter readings because that previously caused
+// the displayed weight to lag one measurement behind rapid changes.
 public sealed class MedianStabilizer
 {
     private readonly int _window;
