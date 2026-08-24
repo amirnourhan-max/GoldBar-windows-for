@@ -17,8 +17,6 @@ public static partial class WeightParser
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
         // Find the last numeric token manually (faster than regex)
-        var lastNumStart = -1;
-        var lastNumEnd = -1;
         var i = raw.Length - 1;
         
         // Skip trailing whitespace
@@ -27,29 +25,46 @@ public static partial class WeightParser
         if (i < 0) return null;
         
         // Find end of number (digits, comma, or dot)
-        lastNumEnd = i + 1;
+        var lastNumEnd = i + 1;
         while (i >= 0 && IsDigitOrSeparator(raw[i])) i--;
-        lastNumStart = i + 1;
+        var lastNumStart = i + 1;
         
         if (lastNumStart >= lastNumEnd) return null;
         
         // Extract and parse the number
-        Span<char> buffer = stackalloc char[lastNumEnd - lastNumStart];
+        // Use stack allocation for typical scale payload lengths
+        var len = lastNumEnd - lastNumStart;
+        Span<char> buffer = stackalloc char[len + 1]; // +1 for potential dot replacement
         var pos = 0;
+        var hasDecimal = false;
         
         for (var j = lastNumStart; j < lastNumEnd; j++)
         {
             var c = raw[j];
-            if (c == ',' || c == ' ' || c == '\t')
-                continue; // Skip separators and whitespace
-            if (c == '.' || c == '٫') // Both Western and Arabic decimal separator
+            if (c == ' ' || c == '\t')
+                continue; // Skip whitespace
+            if (c == '.')
+            {
                 buffer[pos++] = '.';
+                hasDecimal = true;
+            }
+            else if (c == ',' || c == '٫') // Both comma and Arabic decimal separator
+            {
+                buffer[pos++] = '.';
+                hasDecimal = true;
+            }
             else if (c == '+' || c == '-')
+            {
                 buffer[pos++] = c;
+            }
             else if (c >= '0' && c <= '9')
+            {
                 buffer[pos++] = c;
+            }
             else
+            {
                 return null; // Invalid character in number
+            }
         }
         
         if (pos == 0) return null;
