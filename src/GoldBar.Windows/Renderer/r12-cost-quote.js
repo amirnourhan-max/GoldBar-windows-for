@@ -75,8 +75,8 @@
   }
 
   function readState() {
-    try { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', ...JSON.parse(sessionStorage.getItem(COST_KEY) || '{}') }; }
-    catch { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'' }; }
+    try { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'', ...JSON.parse(sessionStorage.getItem(COST_KEY) || '{}') }; }
+    catch { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'' }; }
   }
 
   function saveState() {
@@ -84,7 +84,9 @@
       goldQuote: cleanNumber($('#r12GoldQuote')?.value),
       silverQuote: cleanNumber($('#r12SilverQuote')?.value),
       barDifference: cleanNumber($('#r12BarDifference')?.value),
-      alloyPrice: cleanNumber($('#r12AlloyPrice')?.value)
+      alloyPrice: cleanNumber($('#r12AlloyPrice')?.value),
+      cutchPrice: cleanNumber($('#r12CutchPrice')?.value),
+      resinPrice: cleanNumber($('#r12ResinPrice')?.value)
     };
     sessionStorage.setItem(COST_KEY, JSON.stringify(state));
   }
@@ -111,12 +113,15 @@
     const silverQuote = numberOf($('#r12SilverQuote')?.value);
     const barDifference = numberOf($('#r12BarDifference')?.value);
     const alloyPrice = numberOf($('#r12AlloyPrice')?.value);
+    const cutchPrice = numberOf($('#r12CutchPrice')?.value);
+    const resinPrice = numberOf($('#r12ResinPrice')?.value);
     const entries = readEntries();
     const context = detectAssayContext();
 
     const empty = {
       ok:false, goldPricePerGram:NaN, silverEquivalentGold:NaN,
-      barDifferenceGold:NaN, alloyEquivalentGold:NaN, totalGoldCost:NaN,
+      barDifferenceGold:NaN, alloyEquivalentGold:NaN, cutchEquivalentGold:NaN,
+      resinEquivalentGold:NaN, totalGoldCost:NaN,
       silverRequired:NaN, nonSilverRequired:NaN, highAssayWeight:NaN
     };
     if (!engine || !(goldQuote > 0) || !Number.isFinite(silverQuote) ||
@@ -139,11 +144,17 @@
     // User definition: "1" means one gram per each 1,000 g of high-assay gold.
     const barDifferenceGold = highAssayWeight * barDifference / 1000;
     const alloyEquivalentGold = nonSilverRequired * alloyPrice / goldPricePerGram;
-    const totalGoldCost = silverEquivalentGold + barDifferenceGold + alloyEquivalentGold;
+    // Cutch and resin: convert to gold grams using the same formula as bar
+    // These are additional materials with their own weights and prices
+    const cutchWeight = Number(alloy.fourPerThousand) || 0;
+    const resinWeight = Number(alloy.finalOtherAlloy) || 0;
+    const cutchEquivalentGold = Number.isFinite(cutchPrice) && cutchPrice > 0 ? cutchWeight * cutchPrice / goldPricePerGram : 0;
+    const resinEquivalentGold = Number.isFinite(resinPrice) && resinPrice > 0 ? resinWeight * resinPrice / goldPricePerGram : 0;
+    const totalGoldCost = silverEquivalentGold + barDifferenceGold + alloyEquivalentGold + cutchEquivalentGold + resinEquivalentGold;
     return {
-      ok:[silverEquivalentGold,barDifferenceGold,alloyEquivalentGold,totalGoldCost].every(Number.isFinite),
+      ok:[silverEquivalentGold,barDifferenceGold,alloyEquivalentGold,cutchEquivalentGold,resinEquivalentGold,totalGoldCost].every(Number.isFinite),
       goldPricePerGram, silverEquivalentGold, barDifferenceGold, alloyEquivalentGold,
-      totalGoldCost, silverRequired, nonSilverRequired, highAssayWeight
+      cutchEquivalentGold, resinEquivalentGold, totalGoldCost, silverRequired, nonSilverRequired, highAssayWeight
     };
   }
 
@@ -155,6 +166,8 @@
     set('r12SilverGoldEquivalent', r.silverEquivalentGold);
     set('r12BarDifferenceGold', r.barDifferenceGold);
     set('r12AlloyGoldEquivalent', r.alloyEquivalentGold);
+    set('r12CutchGoldEquivalent', r.cutchEquivalentGold);
+    set('r12ResinGoldEquivalent', r.resinEquivalentGold);
     set('r12CostTotal', r.totalGoldCost);
     const total = $('#r12CostTotalWrap');
     total?.classList.toggle('ready', r.ok);
@@ -190,9 +203,9 @@
     style.textContent = `
       .r12-cost-card{grid-column:1/-1;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,rgba(24,26,28,.98),rgba(14,16,18,.98));border-radius:16px;padding:18px 20px 16px;direction:rtl;box-sizing:border-box}
       .r12-cost-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.r12-cost-head h3{margin:0 0 5px;color:#f4f1e9;font-size:18px;font-weight:900}.r12-cost-head p{margin:0;color:#848b96;font-size:10px;font-weight:800}.r12-cost-badge{border:1px solid rgba(242,196,91,.3);background:rgba(242,196,91,.07);color:#f2c45b;border-radius:14px;padding:7px 10px;font-size:9px;font-weight:900;white-space:nowrap}
-      .r12-cost-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.r12-cost-field label{display:block;color:#b7bdc7;font-size:10px;font-weight:900;margin-bottom:5px}.r12-cost-input-row{display:flex;gap:6px;direction:ltr}.r12-cost-field input{width:100%;height:40px;box-sizing:border-box;border:1px solid #363b3e;background:#0b0e10;color:#f4f1e9;border-radius:9px;padding:0 10px;font:900 12px Tahoma,"Segoe UI",Arial,sans-serif;text-align:center;direction:ltr;outline:none}.r12-cost-field input:focus{border-color:rgba(242,196,91,.62);box-shadow:0 0 0 2px rgba(242,196,91,.06)}
+      .r12-cost-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.r12-cost-field label{display:block;color:#b7bdc7;font-size:10px;font-weight:900;margin-bottom:5px}.r12-cost-input-row{display:flex;gap:6px;direction:ltr}.r12-cost-field input{width:100%;height:40px;box-sizing:border-box;border:1px solid #363b3e;background:#0b0e10;color:#f4f1e9;border-radius:9px;padding:0 10px;font:900 12px Tahoma,"Segoe UI",Arial,sans-serif;text-align:center;direction:ltr;outline:none}.r12-cost-field input:focus{border-color:rgba(242,196,91,.62);box-shadow:0 0 0 2px rgba(242,196,91,.06)}
       .r12-fetch-btn{height:40px;min-width:86px;border:1px solid rgba(242,196,91,.42);background:rgba(242,196,91,.09);color:#f2c45b;border-radius:9px;font:900 10px Tahoma,"Segoe UI",Arial,sans-serif;cursor:pointer}.r12-fetch-btn.busy{opacity:.6;pointer-events:none}.r12-quote-status{margin-top:5px;min-height:16px;color:#717985;font-size:9px;font-weight:800}.r12-quote-status.ok{color:#45d47a}.r12-quote-status.error{color:#ff7d7d}
-      .r12-cost-results{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:13px}.r12-cost-result{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center}.r12-cost-result span{display:block;color:#858d99;font-size:9px;font-weight:800;margin-bottom:4px}.r12-cost-result b{display:block;color:#f2c45b;font-size:14px;font-weight:900;direction:ltr}.r12-cost-total{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:12px 14px;border:1px solid rgba(242,196,91,.34);border-radius:10px;background:rgba(242,196,91,.055)}.r12-cost-total span{color:#f2c45b;font-size:12px;font-weight:900}.r12-cost-total b{color:#f2c45b;font-size:20px;font-weight:900;direction:ltr}.r12-cost-note{margin-top:8px;color:#68717d;font-size:9px;font-weight:800;line-height:1.6}
+      .r12-cost-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:13px}.r12-cost-result{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center}.r12-cost-result span{display:block;color:#858d99;font-size:9px;font-weight:800;margin-bottom:4px}.r12-cost-result b{display:block;color:#f2c45b;font-size:14px;font-weight:900;direction:ltr}.r12-cost-total{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:12px 14px;border:1px solid rgba(242,196,91,.34);border-radius:10px;background:rgba(242,196,91,.055)}.r12-cost-total span{color:#f2c45b;font-size:12px;font-weight:900}.r12-cost-total b{color:#f2c45b;font-size:20px;font-weight:900;direction:ltr}.r12-cost-note{margin-top:8px;color:#68717d;font-size:9px;font-weight:800;line-height:1.6}
       .r12-quote-settings{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}.r12-quote-settings h4{margin:0 0 9px;color:#f2c45b;font-size:12px;font-weight:900}.r12-quote-setting{margin-bottom:7px}.r12-quote-setting label{display:block;margin-bottom:4px;color:#9ea5af;font-size:9px;font-weight:800}.r12-quote-setting input{width:100%;height:32px;box-sizing:border-box;border:1px solid #353a3d;background:#0b0e10;color:#f4f1e9;border-radius:8px;padding:0 8px;font:800 10px Tahoma,"Segoe UI",Arial,sans-serif;direction:ltr;text-align:left;outline:none}.r12-quote-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.r12-quote-actions button{height:32px;border-radius:8px;font:900 9px Tahoma,"Segoe UI",Arial,sans-serif;cursor:pointer}.r12-quote-save{border:0;background:#f2b91c;color:#171717}.r12-quote-test{border:1px solid rgba(242,196,91,.35);background:rgba(242,196,91,.07);color:#f2c45b}.r12-quote-settings-status{margin-top:6px;min-height:15px;color:#737b86;font-size:8.5px;font-weight:800}.r12-quote-settings-status.ok{color:#45d47a}.r12-quote-settings-status.error{color:#ff7d7d}
       .settings{overflow-y:auto!important;overflow-x:hidden!important}.settings::-webkit-scrollbar{width:5px}.settings::-webkit-scrollbar-thumb{background:rgba(242,196,91,.25);border-radius:8px}
       @media(max-width:1180px){.r12-cost-fields,.r12-cost-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -212,18 +225,22 @@
       card.id = 'r12CostCard';
       card.className = 'r12-cost-card';
       card.innerHTML = `
-        <div class="r12-cost-head"><div><h3>هزینه عیار</h3><p>محاسبه هزینه نقره، فرق شمش و بار به معادل گرم طلا</p></div><div class="r12-cost-badge">مبنای مثقال 4.3318 g</div></div>
+        <div class="r12-cost-head"><div><h3>هزینه عیار</h3><p>محاسبه هزینه نقره، فرق شمش، بار، کچ و رزین به معادل گرم طلا</p></div><div class="r12-cost-badge">مبنای مثقال 4.3318 g</div></div>
         <div class="r12-cost-fields">
           <div class="r12-cost-field"><label>مظنه طلا — هر مثقال</label><div class="r12-cost-input-row"><input id="r12GoldQuote" inputmode="decimal" autocomplete="off" placeholder="0"><button id="r12FetchQuote" class="r12-fetch-btn">دریافت مظنه</button></div><div id="r12QuoteStatus" class="r12-quote-status">ورود دستی یا دریافت از سایت</div></div>
           <div class="r12-cost-field"><label>مظنه نقره — هر گرم</label><input id="r12SilverQuote" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>فرق شمش — گرم در هر کیلو</label><input id="r12BarDifference" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>هر گرم بار</label><input id="r12AlloyPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+          <div class="r12-cost-field"><label>هر گرم کچ</label><input id="r12CutchPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+          <div class="r12-cost-field"><label>هر گرم رزین</label><input id="r12ResinPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
         </div>
         <div class="r12-cost-results">
           <div class="r12-cost-result"><span>قیمت هر گرم طلا</span><b id="r12GoldGramPrice">—</b></div>
           <div class="r12-cost-result"><span>هزینه نقره (گرم طلا)</span><b id="r12SilverGoldEquivalent">—</b></div>
           <div class="r12-cost-result"><span>فرق شمش (گرم طلا)</span><b id="r12BarDifferenceGold">—</b></div>
           <div class="r12-cost-result"><span>قیمت بار (گرم طلا)</span><b id="r12AlloyGoldEquivalent">—</b></div>
+          <div class="r12-cost-result"><span>هزینه کچ (گرم طلا)</span><b id="r12CutchGoldEquivalent">—</b></div>
+          <div class="r12-cost-result"><span>هزینه رزین (گرم طلا)</span><b id="r12ResinGoldEquivalent">—</b></div>
         </div>
         <div id="r12CostTotalWrap" class="r12-cost-total"><span>جمع هزینه عیار (گرم طلا)</span><b><span id="r12CostTotal">—</span> g</b></div>
         <div class="r12-cost-note">فرق شمش طبق تعریف شما محاسبه می‌شود: عدد 1 یعنی 1 گرم به ازای هر 1,000 گرم از آبشده‌های با عیار بالاتر از 900.</div>`;
@@ -233,10 +250,14 @@
       $('#r12SilverQuote').value = grouped(state.silverQuote);
       $('#r12BarDifference').value = state.barDifference || '';
       $('#r12AlloyPrice').value = grouped(state.alloyPrice);
+      $('#r12CutchPrice').value = grouped(state.cutchPrice);
+      $('#r12ResinPrice').value = grouped(state.resinPrice);
       bindMoneyInput($('#r12GoldQuote'));
       bindMoneyInput($('#r12SilverQuote'));
       bindPlainDecimal($('#r12BarDifference'));
       bindMoneyInput($('#r12AlloyPrice'));
+      bindMoneyInput($('#r12CutchPrice'));
+      bindMoneyInput($('#r12ResinPrice'));
       $('#r12FetchQuote')?.addEventListener('click', () => fetchQuote(true));
       renderCost();
       setTimeout(() => fetchQuote(false), 180);
