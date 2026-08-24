@@ -202,6 +202,18 @@
     if (cards[0]) cards[0].textContent = formatNumber(t.totalWeight, 3);
     if (cards[1]) cards[1].textContent = formatNumber(t.average, 3);
     if (cards[2]) cards[2].textContent = String(t.count);
+    // Calculate required bar weight: weight * avgAssay / targetAssay - weight
+    const calcCards = $$('.calc-card');
+    if (calcCards[1] && cards[3]) {
+      const inputs = [...calcCards[1].querySelectorAll('input')];
+      const target = parseNumber(inputs[0]?.value);
+      if (t.totalWeight > 0 && Number.isFinite(target) && target > 0) {
+        const required = t.totalWeight * t.average / target - t.totalWeight;
+        cards[3].textContent = formatNumber(required, 3);
+      } else {
+        cards[3].textContent = '0';
+      }
+    }
   }
 
   function renderRecent() {
@@ -337,6 +349,14 @@
     if (calcTitles[1]) calcTitles[1].textContent = 'عیار';
     const recentTitle = $('.recent-card h3');
     if (recentTitle) recentTitle.textContent = 'آبشده‌های ثبت شده';
+    // Change second calc-card mini-stats: "کل وزن" → "بار مورد نیاز"
+    if (calcTitles[1]) {
+      const card = calcTitles[1].closest('.calc-card');
+      if (card) {
+        const spans = card.querySelectorAll('.mini-stats span');
+        if (spans[1]) spans[1].textContent = 'بار مورد نیاز (g)';
+      }
+    }
 
     const actionRow = $('.quick-card .action-row');
     if (actionRow) {

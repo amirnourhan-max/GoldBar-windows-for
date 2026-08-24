@@ -234,9 +234,7 @@
       grid.className = 'r5-silver-grid';
       grid.innerHTML = `
         <div class="r5-silver-stat"><span>نقره مورد نیاز (g)</span><b id="r5SilverRequired">0</b></div>
-        <div class="r5-silver-stat"><span>بار بدون نقره (g)</span><b id="r5NonSilver">0</b></div>
-        <div class="r5-silver-stat"><span>۰.۴٪ وزن (g)</span><b id="r5FourPermille">0</b></div>
-        <div class="r5-silver-stat"><span>بار نهایی دیگر (g)</span><b id="r5FinalOther">0</b></div>`;
+        <div class="r5-silver-stat"><span>بار بدون نقره (g)</span><b id="r5NonSilver">0</b></div>`;
       card.appendChild(grid);
     }
 
@@ -244,8 +242,15 @@
     inputs.forEach(input => {
       if (input.dataset.r5SilverBound === '1') return;
       input.dataset.r5SilverBound = '1';
-      input.addEventListener('input', () => updateSilverBreakdown());
-      input.addEventListener('change', () => updateSilverBreakdown());
+      input.addEventListener('input', () => {
+        updateSilverBreakdown();
+        // Update dashboard summary when calc inputs change
+        if (typeof window.__goldbarRecalculate === 'function') window.__goldbarRecalculate();
+      });
+      input.addEventListener('change', () => {
+        updateSilverBreakdown();
+        if (typeof window.__goldbarRecalculate === 'function') window.__goldbarRecalculate();
+      });
     });
     updateSilverBreakdown();
     return true;
@@ -266,8 +271,9 @@
     };
     set('r5SilverRequired', result.silverRequired);
     set('r5NonSilver', result.nonSilverRequired);
-    set('r5FourPermille', result.fourPerThousand);
-    set('r5FinalOther', result.finalOtherAlloy);
+    // Also update the calc-card second mini-stat (bar needed)
+    const bBars = card.querySelectorAll('.mini-stats b');
+    if (bBars[1]) bBars[1].textContent = Number.isFinite(result.totalAlloyRequired) ? formatNumber(result.totalAlloyRequired, 3) : '0';
   }
 
   function changeTopAssayLabel() {
