@@ -1,0 +1,161 @@
+name: Build Gold Bar Windows Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/GoldBar.Windows/**'
+      - '.github/workflows/windows-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/GoldBar.Windows/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore and publish self-contained x64
+        shell: pwsh
+        run: |
+          $proj = Join-Path $PWD 'src/GoldBar.Windows/GoldBar.Windows.csproj'
+          $out = Join-Path $PWD 'src/GoldBar.Windows/publish'
+          dotnet restore $proj -r win-x64
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet restore failed' }
+          dotnet publish $proj -c Release -r win-x64 --self-contained true --no-restore -o $out -p:PublishReadyToRun=false -p:PublishSingleFile=false
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+
+      - name: Run compiled software self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'src/GoldBar.Windows/publish/GoldBar.exe'
+          if (!(Test-Path $exe)) { throw 'GoldBar.exe was not produced' }
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "GoldBar self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Run full renderer UI, resolution and calculation self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'src/GoldBar.Windows/publish/GoldBar.exe'
+          $result = Join-Path $env:TEMP 'goldbar-ui-self-test.json'
+          Remove-Item $result -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe -ArgumentList '--ui-self-test' -Wait -PassThru
+          if (Test-Path $result) { Write-Host 'UI TEST RESULT:'; Get-Content $result -Raw | Write-Host }
+          if ($p.ExitCode -ne 0) { throw "GoldBar UI self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Validate first-run registration window startup
+        shell: pwsh
+        run: |
+          $credential = Join-Path $env:LOCALAPPDATA 'GoldBar\credentials.json'
+          Remove-Item $credential -Force -ErrorAction SilentlyContinue
+          $exe = Join-Path $PWD 'src/GoldBar.Windows/publish/GoldBar.exe'
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 4
+          $p.Refresh()
+          if ($p.HasExited) { throw "GoldBar exited before showing first-run registration with code $($p.ExitCode)" }
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WindowStateProbe {
+            [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
+            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+            [StructLayout(LayoutKind.Sequential)] public struct WINDOWPLACEMENT {
+              public int length; public int flags; public int showCmd; public POINT ptMinPosition; public POINT ptMaxPosition; public RECT rcNormalPosition;
+            }
+            [DllImport("user32.dll")] public static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+            [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+          }
+          '@
+          $handle = $p.MainWindowHandle
+          if ($handle -eq 0) { throw 'GoldBar first-run registration window handle was not found' }
+          $wp = New-Object WindowStateProbe+WINDOWPLACEMENT
+          $wp.length = [Runtime.InteropServices.Marshal]::SizeOf($wp)
+          if (![WindowStateProbe]::GetWindowPlacement($handle, [ref]$wp)) { throw 'GetWindowPlacement failed' }
+          if ($wp.showCmd -eq 2 -or $wp.showCmd -eq 3) { throw "Registration must not start minimized or maximized. showCmd=$($wp.showCmd)" }
+          $rect = New-Object WindowStateProbe+RECT
+          if (![WindowStateProbe]::GetWindowRect($handle, [ref]$rect)) { throw 'GetWindowRect failed' }
+          $windowW = $rect.Right - $rect.Left
+          $windowH = $rect.Bottom - $rect.Top
+          $screenW = [WindowStateProbe]::GetSystemMetrics(0)
+          $screenH = [WindowStateProbe]::GetSystemMetrics(1)
+          if ($windowW -ge $screenW -and $windowH -ge $screenH) { throw "Registration unexpectedly occupies the full screen: ${windowW}x${windowH}" }
+          if ($windowW -lt 430 -or $windowH -lt 400) { throw "Registration window is unexpectedly small: ${windowW}x${windowH}" }
+          Write-Host "FIRST-RUN REGISTRATION PASS: ${windowW}x${windowH} on ${screenW}x${screenH}"
+          Stop-Process -Id $p.Id -Force
+          Remove-Item (Join-Path $PWD 'src/GoldBar.Windows/publish/GoldBar.exe.WebView2') -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Download WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          $dest = Join-Path $PWD 'src/GoldBar.Windows/Installer/MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $dest -UseBasicParsing
+          if (!(Test-Path $dest)) { throw 'WebView2 bootstrapper download failed' }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $iss = Join-Path $PWD 'src/GoldBar.Windows/Installer/GoldBar.iss'
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          & $iscc $iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
+
+      - name: Silent installer validation and installed-app retest
+        shell: pwsh
+        run: |
+          $setup = Join-Path $PWD 'src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe'
+          if (!(Test-Path $setup)) { throw 'Installer was not produced' }
+          $dest = Join-Path $env:RUNNER_TEMP 'GoldBar-Install-Test'
+          $ip = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dest") -Wait -PassThru
+          if ($ip.ExitCode -ne 0) { throw "Installer failed with exit code $($ip.ExitCode)" }
+          $installedExe = Join-Path $dest 'GoldBar.exe'
+          if (!(Test-Path $installedExe)) { throw 'Installed GoldBar.exe not found' }
+          $sp = Start-Process -FilePath $installedExe -ArgumentList '--self-test' -Wait -PassThru
+          if ($sp.ExitCode -ne 0) { throw "Installed executable self-test failed with exit code $($sp.ExitCode)" }
+          $result = Join-Path $env:TEMP 'goldbar-ui-self-test.json'
+          Remove-Item $result -ErrorAction SilentlyContinue
+          $up = Start-Process -FilePath $installedExe -ArgumentList '--ui-self-test' -Wait -PassThru
+          if (Test-Path $result) { Write-Host 'INSTALLED UI TEST RESULT:'; Get-Content $result -Raw | Write-Host }
+          if ($up.ExitCode -ne 0) { throw "Installed UI self-test failed with exit code $($up.ExitCode)" }
+
+          # Verify that a real uninstall removes the registered credential so the next
+          # installation starts with registration again.
+          $credentialDir = Join-Path $env:LOCALAPPDATA 'GoldBar'
+          $credential = Join-Path $credentialDir 'credentials.json'
+          New-Item -ItemType Directory -Path $credentialDir -Force | Out-Null
+          Set-Content -Path $credential -Value '{"test":true}' -Encoding UTF8
+          $uninstaller = Join-Path $dest 'unins000.exe'
+          if (!(Test-Path $uninstaller)) { throw 'Uninstaller was not created' }
+          $unp = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if ($unp.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($unp.ExitCode)" }
+          if (Test-Path $credential) { throw 'Credential file survived uninstall; registration would not reset' }
+          Write-Host 'UNINSTALL REGISTRATION RESET PASS'
+
+      - name: SHA256
+        shell: pwsh
+        run: |
+          $setup = Join-Path $PWD 'src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe'
+          Get-FileHash $setup -Algorithm SHA256 | Format-List
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldBar-Windows-Installer-v2.0.0-r12
+          path: src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GOLD BAR</title>
+  <link rel="stylesheet" href="styles-1.css">
+  <link rel="stylesheet" href="styles-2.css">
+  <link rel="stylesheet" href="styles-3.css">
+</head>
+<body>
+  <div class="viewport">
+  <div class="design-root" id="designRoot">
+  <div class="app-shell">
+    <div class="titlebar" dir="ltr">
+      <div class="title-left"><span class="mini-mark">GB</span><span>GOLD BAR (by:Amirnourhan)</span></div>
+      <div class="window-controls"><button id="winMin" aria-label="کمینه">−</button><button id="winMax" aria-label="بزرگ‌نمایی">□</button><button id="winClose" class="close" aria-label="بستن">×</button></div>
+    </div>
+
+    <div class="app-body" dir="ltr">
+      <aside class="sidebar" dir="rtl">
+        <section class="brand-wrap">
+          <img class="gold-logo" src="assets/gold_bar_logo.webp" alt="Gold Bar" />
+          <div class="brand-title">GOLD BAR</div>
+          <div class="brand-sub">by: Amirnourhan</div>
+        </section>
+
+        <nav class="nav-list">
+          <button class="nav-item active"><i class="fa-solid fa-table-cells-large"></i><span>داشبورد</span></button>
+          <button class="nav-item"><i class="fa-regular fa-clipboard"></i><span>ثبت آبشده</span></button>
+          <button class="nav-item"><i class="fa-solid fa-layer-group"></i><span>آبشده‌ها</span></button>
+          <button class="nav-item"><i class="fa-solid fa-calculator"></i><span>محاسبات عیار</span></button>
+          <button class="nav-item"><i class="fa-solid fa-stopwatch"></i><span>محاسبه سریع</span></button>
+          <button class="nav-item"><i class="fa-regular fa-file-lines"></i><span>گزارش‌ها</span></button>
+          <button class="nav-item"><i class="fa-solid fa-gear"></i><span>تنظیمات</span></button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <section class="scale-card">
+            <div class="scale-head">
+              <div class="scale-name"><i class="fa-solid fa-scale-balanced"></i><span>ترازو</span></div>
+              <div class="connected" id="scaleStatus"><span class="dot"></span><span>متصل</span></div>
+            </div>
+            <div class="scale-weight" dir="ltr"><b data-weight-value>214.373</b><span>g</span></div>
+            <button class="ghost-btn" id="scaleDisconnect">قطع اتصال</button>
+          </section>
+          <div class="version" dir="ltr">GOLD BAR v2.0.0</div>
+          <div class="fresh" dir="ltr"><span class="dot"></span><span dir="rtl">همه چیز بروز است</span></div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header" dir="ltr">
+          <div class="header-copy" dir="rtl">
+            <div class="dash-title"><span class="dash-icon"><i class="fa-solid fa-table-cells-large"></i></span><span>داشبورد</span></div>
+            <div class="subtitle">نمای کلی، وزن، عیار و عملیات</div>
+          </div>
+          <div class="top-actions" dir="rtl">
+            <button class="backup-btn"><i class="fa-solid fa-cloud-arrow-up"></i><span>پشتیبان‌گیری</span></button>
+            <button class="circle-btn"><i class="fa-regular fa-bell"></i></button>
+            <button class="circle-btn gold"><i class="fa-regular fa-user"></i></button>
+          </div>
+        </header>
+
+        <div class="workspace-body" dir="ltr">
+          <main class="center" dir="rtl">
+            <section class="summary-grid" dir="ltr">
+              <article class="summary-card base"><div class="metric-copy" dir="rtl"><div class="metric-label">وزن کل (g)</div><div class="metric-value" dir="ltr">419.17</div></div><div class="metric-icon"><i class="fa-solid fa-scale-balanced"></i></div></article>
+              <article class="summary-card amber"><div class="metric-copy" dir="rtl"><div class="metric-label">عیار میانگین (‰)</div><div class="metric-value gold-text" dir="ltr">896.262</div></div><div class="metric-icon"><i class="fa-solid fa-award"></i></div></article>
+              <article class="summary-card purple"><div class="metric-copy" dir="rtl"><div class="metric-label">تعداد آبشده‌ها</div><div class="metric-value" dir="ltr">4</div></div><div class="metric-icon"><i class="fa-solid fa-camera-rotate"></i></div></article>
+              <article class="summary-card green"><div class="metric-copy" dir="rtl"><div class="metric-label">کل بار مورد نیاز (g)</div><div class="metric-value" dir="ltr">57.413</div></div><div class="metric-icon"><i class="fa-solid fa-weight-hanging"></i></div></article>
+            </section>
+
+            <section class="quick-card panel">
+              <div class="panel-head" dir="ltr"><h2 dir="rtl">ثبت سریع آبشده</h2><div class="panel-tools"><i class="fa-solid fa-grip-vertical"></i><i class="fa-solid fa-arrows-up-down-left-right"></i><i class="fa-solid fa-up-right-and-down-left-from-center"></i></div></div>
+              <div class="quick-fields" dir="ltr">
+                <div class="weight-block" dir="rtl">
+                  <label>وزن (g)</label>
+                  <div class="weight-row" dir="ltr">
+                    <input id="weightInput" class="inputbox big-number numeric-input decimal-input" inputmode="decimal" autocomplete="off" value="214.373" aria-label="وزن" />
+                    <button class="read-btn" id="readScale" dir="rtl"><i class="fa-solid fa-weight-scale"></i><span>خواندن از ترازو</span></button>
+                  </div>
+                  <div class="hint"><span class="tiny-dot"></span><span>کلید ↑ روی کیبورد برای خواندن وزن</span></div>
+                </div>
+                <div class="purity-block" dir="rtl">
+                  <label>عیار (‰)</label>
+                  <input id="purityInput" class="selectbox numeric-input integer-input" inputmode="numeric" autocomplete="off" min="0" max="1000" value="750" aria-label="عیار" />
+                </div>
+                <div class="note-block" dir="rtl">
+                  <label>توضیحات</label>
+                  <input id="descriptionInput" class="inputbox placeholder" type="text" autocomplete="off" placeholder="توضیحات اختیاری..." aria-label="توضیحات" />
+                </div>
+              </div>
+              <div class="action-row" dir="ltr">
+                <button class="primary-btn" dir="rtl"><span>ثبت آبشده</span><i class="fa-solid fa-plus"></i></button>
+                <button class="secondary-btn" dir="rtl"><span>ثبت و جدید</span><i class="fa-solid fa-crosshairs"></i></button>
+                <button class="secondary-btn" dir="rtl"><span>پاک کردن</span><i class="fa-regular fa-trash-can"></i></button>
+              </div>
+              <div class="resize-mark"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></div>
+            </section>
+
+            <section class="bottom-grid" dir="ltr">
+              <article class="calc-card panel" dir="rtl">
+                <h3>عیار بدون عیار</h3>
+                <p>در صورت اضافه کردن بدون عیار اضافی در آینده</p>
+                <div class="two-col" dir="ltr">
+                  <div dir="rtl"><label>عیار هدف</label><input class="smallbox numeric-input integer-input" inputmode="numeric" value="747" aria-label="عیار هدف" /></div>
+                  <div dir="rtl"><label>عیار فعلی</label><input class="smallbox numeric-input integer-input" inputmode="numeric" value="995" aria-label="عیار فعلی" /></div>
+                </div>
+                <div class="mini-stats" dir="ltr">
+                  <div><span>اختلاف با هدف</span><b>0</b></div>
+                  <div><span>فاصله مورد نیاز (g)</span><b>0</b></div>
+                </div>
+                <div class="calc-footer">افزایش عیار لازم نیست</div>
+              </article>
+
+              <article class="calc-card panel" dir="rtl">
+                <h3>عیار افزودنی</h3>
+                <p>در صورت اضافه کردن عیار به عیار فعلی در آینده</p>
+                <div class="two-col" dir="ltr">
+                  <div dir="rtl"><label>عیار هدف</label><input class="smallbox numeric-input integer-input" inputmode="numeric" value="746" aria-label="عیار هدف افزودنی" /></div>
+                  <div dir="rtl"><label>درصد افزوده</label><input class="smallbox numeric-input decimal-input" inputmode="decimal" value="10" aria-label="درصد افزوده" /></div>
+                </div>
+                <div class="mini-stats" dir="ltr">
+                  <div><span>کل طلا (g)</span><b class="white">84.431</b></div>
+                  <div><span>کل وزن (g)</span><b class="white">930.742</b></div>
+                </div>
+                <div class="wide-stat"><span>وزن مورد نیاز (g)</span><b>57.413</b></div>
+              </article>
+
+              <article class="recent-card panel" dir="rtl">
+                <h3>آخرین آبشده‌ها</h3>
+                <div class="recent-row" dir="ltr"><span>214.373 g</span><span>750 ‰</span><span>1403/11/21 - 14:32</span></div>
+                <div class="recent-row" dir="ltr"><span>102.500 g</span><span>745 ‰</span><span>1403/11/21 - 13:20</span></div>
+                <div class="recent-row" dir="ltr"><span>56.200 g</span><span>740 ‰</span><span>1403/11/21 - 11:05</span></div>
+                <div class="recent-row" dir="ltr"><span>46.097 g</span><span>750 ‰</span><span>1403/11/21 - 09:40</span></div>
+                <button class="view-all">مشاهده همه</button>
+              </article>
+            </section>
+          </main>
+
+          <aside class="settings panel" dir="rtl">
+            <div class="settings-head" dir="ltr"><div class="settings-title"><i class="fa-solid fa-gear"></i><span dir="rtl">تنظیمات ترازو</span></div><div class="settings-tools"><i class="fa-solid fa-sliders"></i><i class="fa-solid fa-xmark"></i></div></div>
+            <div class="settings-form">
+              <div class="setting-row" dir="ltr"><label>COM Port</label><div class="select-small"><select id="portSelect"><option value="COM1">COM1</option><option value="COM2">COM2</option><option value="COM3">COM3</option><option value="COM4" selected>COM4</option><option value="COM5">COM5</option><option value="COM6">COM6</option><option value="COM7">COM7</option><option value="COM8">COM8</option><option value="COM9">COM9</option><option value="COM10">COM10</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+              <div class="setting-row" dir="ltr"><label>Baud Rate</label><div class="select-small"><select id="baudSelect"><option value="1200">1200</option><option value="2400" selected>2400</option><option value="4800">4800</option><option value="9600">9600</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+              <div class="setting-row" dir="ltr"><label>Data Bits</label><div class="select-small"><select id="dataBitsSelect"><option value="7" selected>7</option><option value="8">8</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+              <div class="setting-row" dir="ltr"><label>Parity</label><div class="select-small"><select id="paritySelect"><option value="None">None</option><option value="Even" selected>Even</option><option value="Odd">Odd</option><option value="Mark">Mark</option><option value="Space">Space</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+              <div class="setting-row" dir="ltr"><label>Stop Bits</label><div class="select-small"><select id="stopBitsSelect"><option value="1">1</option><option value="1.5">1.5</option><option value="2" selected>2</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+              <div class="setting-row" dir="ltr"><label>Flow Control</label><div class="select-small"><select id="flowSelect"><option value="None" selected>None</option><option value="XOnXOff">XOnXOff</option><option value="RTS/CTS">RTS/CTS</option></select><i class="fa-solid fa-chevron-down"></i></div></div>
+            </div>
+            <div class="divider"></div>
+            <div class="section-title">خواندن وزن</div>
+            <div class="toggle-row" dir="ltr"><span dir="rtl">خواندن خودکار (پیوسته)</span><button class="toggle on" id="autoReadToggle" aria-pressed="true"><span></span></button></div>
+            <div class="setting-row muted" dir="ltr"><label>فاصله خواندن (ms)</label><div class="number-small"><input id="readInterval" type="number" min="100" max="10000" step="50" value="800" /><i class="fa-solid fa-angle-up"></i></div></div>
+            <div class="setting-row muted" dir="ltr"><label dir="rtl">تعداد ارقام اعشار</label><div class="number-small"><input id="decimals" type="number" min="0" max="6" step="1" value="3" /><i class="fa-solid fa-angle-up"></i></div></div>
+            <div class="section-title command-title">فرمان درخواست وزن</div>
+            <div class="text-small" dir="ltr"><input id="requestCommand" value="P" readonly tabindex="-1" aria-label="فرمان درخواست وزن" /></div>
+            <div class="toggle-row key-toggle" dir="ltr"><span dir="rtl">پاسخ‌دهی ترازو با کلید ↑</span><button class="toggle on" id="keyboardReadToggle" aria-pressed="true"><span></span></button></div>
+            <button class="test-btn" id="testScale"><span>تست دریافت وزن</span><i class="fa-solid fa-signal"></i></button>
+            <div class="test-result" id="testResult">نتیجه: <b>214.373 g</b> <i class="fa-solid fa-check"></i></div>
+            <div class="divider lower"></div>
+            <div class="settings-actions" dir="ltr"><button class="reset-btn" id="resetSettings">بازنشانی</button><button class="save-btn" id="saveSettings">ذخیره تنظیمات</button></div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  </div>
+  </div>
+  </div>
+  <script src="webview-bridge.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
