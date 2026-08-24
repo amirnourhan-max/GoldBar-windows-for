@@ -24,7 +24,7 @@ public partial class App : Application
             CurrentUser.Username = "self-test";
             _ = Task.Run(async () =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(20));
+                await Task.Delay(TimeSpan.FromSeconds(60));
                 try
                 {
                     Dispatcher.Invoke(() =>
