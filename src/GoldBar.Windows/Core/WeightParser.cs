@@ -16,55 +16,48 @@ public static partial class WeightParser
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
-        // Find the last numeric token manually (faster than regex)
+        // Find the last numeric token: a contiguous sequence of digits,
+        // optionally with a leading decimal separator and/or leading sign.
+        
         var i = raw.Length - 1;
         
-        // Skip trailing whitespace
-        while (i >= 0 && char.IsWhiteSpace(raw[i])) i--;
-        
+        // Step 1: Find the last digit
+        while (i >= 0 && !IsDigit(raw[i])) i--;
         if (i < 0) return null;
         
-        // Find end of number (digits, comma, or dot)
-        var lastNumEnd = i + 1;
-        while (i >= 0 && IsDigitOrSeparator(raw[i])) i--;
-        var lastNumStart = i + 1;
+        // Step 2: Scan left through digits and decimal separators (dots/commas)
+        var end = i + 1;
+        while (i >= 0 && (IsDigit(raw[i]) || IsDecimalSeparator(raw[i]))) i--;
         
-        if (lastNumStart >= lastNumEnd) return null;
+        // Step 3: Check for optional leading sign (+/-)
+        if (i >= 0 && (raw[i] == '+' || raw[i] == '-'))
+        {
+            // Only include sign if it's immediately before the number (no whitespace gap)
+            if (i + 1 < end && raw[i + 1] != ' ' && raw[i + 1] != '\t')
+                i--;
+        }
         
-        // Extract and parse the number
-        // Use stack allocation for typical scale payload lengths
-        var len = lastNumEnd - lastNumStart;
-        Span<char> buffer = stackalloc char[len + 1]; // +1 for potential dot replacement
+        var start = i + 1;
+        if (start >= end) return null;
+        
+        // Step 4: Extract and parse the number
+        var len = end - start;
+        Span<char> buffer = stackalloc char[len];
         var pos = 0;
-        var hasDecimal = false;
         
-        for (var j = lastNumStart; j < lastNumEnd; j++)
+        for (var j = start; j < end; j++)
         {
             var c = raw[j];
             if (c == ' ' || c == '\t')
-                continue; // Skip whitespace
-            if (c == '.')
-            {
+                continue; // Skip whitespace within number
+            if (c == '.' || c == ',' || c == '٫') // Decimal separators
                 buffer[pos++] = '.';
-                hasDecimal = true;
-            }
-            else if (c == ',' || c == '٫') // Both comma and Arabic decimal separator
-            {
-                buffer[pos++] = '.';
-                hasDecimal = true;
-            }
             else if (c == '+' || c == '-')
-            {
                 buffer[pos++] = c;
-            }
             else if (c >= '0' && c <= '9')
-            {
                 buffer[pos++] = c;
-            }
             else
-            {
-                return null; // Invalid character in number
-            }
+                return null; // Invalid character
         }
         
         if (pos == 0) return null;
@@ -78,8 +71,11 @@ public static partial class WeightParser
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsDigitOrSeparator(char c) =>
-        c is >= '0' and <= '9' or '.' or ',' or '٫' or '+' or '-' or ' ' or '\t';
+    private static bool IsDigit(char c) => c >= '0' && c <= '9';
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsDecimalSeparator(char c) =>
+        c == '.' || c == ',' || c == '٫';
 }
 
 /// <summary>
