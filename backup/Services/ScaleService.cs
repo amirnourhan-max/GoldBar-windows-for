@@ -11,26 +11,19 @@ public sealed record ScaleReading(double Value, string Raw, string Source, long 
 public sealed record ScaleTestResult(bool Ok, double? Weight, string Message, string Raw = "", long LatencyMs = 0);
 
 /// <summary>
-/// Optimized serial engine for the workshop scale.
-/// 
-/// Key optimizations:
-/// - Reduced allocations with reusable buffers
-/// - Lighter synchronization primitives
-/// - Faster frame processing pipeline
-/// - Adaptive polling based on connection stability
-/// - Better error recovery and resilience
+/// Serial engine for the workshop scale.
+/// Uses only SerialPort's own buffered API for receive/write operations so data is never
+/// split between SerialPort's internal buffer and BaseStream. Manual/test requests clear
+/// stale input, are correlated to a fresh response, and auto polling cannot interleave a
+/// second command while an operator request is waiting.
 /// </summary>
 public sealed class ScaleService : IDisposable
 {
     private static readonly TimeSpan PendingLifetime = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan StaleThreshold = TimeSpan.FromSeconds(5);
-    
-    // Lightweight synchronization instead of SemaphoreSlim for better performance
-    private readonly object _stateLock = new();
-    private readonly object _writeLock = new();
-    private readonly object _decoderLock = new();
-    private readonly object _pendingLock = new();
-    
+    private readonly SemaphoreSlim _stateGate = new(1, 1);
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly object _decoderGate = new();
+    private readonly object _pendingGate = new();
     private readonly ScaleFrameDecoder _decoder = new();
 
     private SerialPort? _port;
@@ -44,14 +37,6 @@ public sealed class ScaleService : IDisposable
     private DateTimeOffset _lastBytesAt = DateTimeOffset.MinValue;
     private DateTimeOffset _lastInvalidFrameAt = DateTimeOffset.MinValue;
     private string _lastInvalidFrame = string.Empty;
-    
-    // Performance tracking
-    private long _successfulReads;
-    private long _failedReads;
-    private DateTimeOffset _lastSuccessAt = DateTimeOffset.MinValue;
-    
-    // Pre-allocated buffer for responses
-    private readonly StringBuilder _responseBuffer = new(256);
 
     private sealed record PendingRead(
         string Source,
@@ -63,85 +48,58 @@ public sealed class ScaleService : IDisposable
     public event Action<bool, string>? StatusChanged;
     public event Action<string>? Error;
 
-    public bool IsConnected
-    {
-        get
-        {
-            lock (_stateLock)
-            {
-                return _port?.IsOpen == true;
-            }
-        }
-    }
-    
+    public bool IsConnected => _port?.IsOpen == true;
     public string LastError { get; private set; } = string.Empty;
     public ScaleReading? LatestReading { get; private set; }
-    
-    /// <summary>
-    /// Statistics for monitoring performance.
-    /// </summary>
-    public (long Successful, long Failed, double SuccessRate) Stats
-    {
-        get
-        {
-            var total = _successfulReads + _failedReads;
-            var rate = total > 0 ? (double)_successfulReads / total * 100 : 0;
-            return (_successfulReads, _failedReads, rate);
-        }
-    }
 
     public async Task<bool> ConnectAsync(ScaleSettings settings)
     {
         ThrowIfDisposed();
         var target = settings.Normalize();
-        
-        await Task.CompletedTask; // Ensure async signature for consistency
-        
-        lock (_stateLock)
+        await _stateGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            try
+            if (_port?.IsOpen == true && SerialConfigEquals(_settings, target))
             {
-                if (_port?.IsOpen == true && SerialConfigEquals(_settings, target))
-                {
-                    _settings = target;
-                    RestartAutoLoop();
-                    return true;
-                }
-
-                DisconnectCore(notify: false);
-                LastError = string.Empty;
                 _settings = target;
-
-                var port = CreatePort(target);
-                _port = port;
-                port.DataReceived += OnDataReceived;
-                port.ErrorReceived += OnErrorReceived;
-                port.Open();
-
-                ResetReceiveState();
                 RestartAutoLoop();
-                StatusChanged?.Invoke(true, $"متصل به {target.ScaleName} روی {target.Port}");
                 return true;
             }
-            catch (Exception ex)
-            {
-                LastError = DescribeException(ex, target.Port);
-                DisconnectCore(notify: false);
-                StatusChanged?.Invoke(false, LastError);
-                Error?.Invoke(LastError);
-                return false;
-            }
+
+            DisconnectCore(notify: false);
+            LastError = string.Empty;
+            _settings = target;
+
+            var port = CreatePort(target);
+            _port = port;
+            port.DataReceived += OnDataReceived;
+            port.ErrorReceived += OnErrorReceived;
+            port.Open();
+
+            ResetReceiveState();
+            RestartAutoLoop();
+            StatusChanged?.Invoke(true, $"متصل به {target.ScaleName} روی {target.Port}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastError = DescribeException(ex, target.Port);
+            DisconnectCore(notify: false);
+            StatusChanged?.Invoke(false, LastError);
+            Error?.Invoke(LastError);
+            return false;
+        }
+        finally
+        {
+            _stateGate.Release();
         }
     }
 
     public void ApplySettings(ScaleSettings settings)
     {
         ThrowIfDisposed();
-        lock (_stateLock)
-        {
-            _settings = settings.Normalize();
-            RestartAutoLoop();
-        }
+        _settings = settings.Normalize();
+        RestartAutoLoop();
     }
 
     public async Task<bool> RequestWeightAsync()
@@ -161,29 +119,20 @@ public sealed class ScaleService : IDisposable
                 $"پورت {target.Port} در ویندوز پیدا نشد. کابل، تبدیل USB/Serial، درایور و شماره COM را بررسی کنید.");
         }
 
-        lock (_stateLock)
+        if (!IsConnected || !SerialConfigEquals(_settings, target))
         {
-            if (!IsConnected || !SerialConfigEquals(_settings, target))
+            if (!await ConnectAsync(target).ConfigureAwait(false))
             {
-                // Need to connect first - release lock for async operation
-            }
-            else
-            {
-                _settings = target;
-                RestartAutoLoop();
-                // Already connected with same config, just test
-                goto performTest;
+                return new ScaleTestResult(false, null,
+                    string.IsNullOrWhiteSpace(LastError) ? "اتصال به ترازو ناموفق بود." : LastError);
             }
         }
-        
-        // Connect outside of lock
-        if (!await ConnectAsync(target).ConfigureAwait(false))
+        else
         {
-            return new ScaleTestResult(false, null,
-                string.IsNullOrWhiteSpace(LastError) ? "اتصال به ترازو ناموفق بود." : LastError);
+            _settings = target;
+            RestartAutoLoop();
         }
-        
-        performTest:
+
         return await ReadOnceAsync("test", Math.Clamp(timeoutMs, 500, 5000), retryOnce: true)
             .ConfigureAwait(false);
     }
@@ -191,22 +140,18 @@ public sealed class ScaleService : IDisposable
     public async Task DisconnectAsync()
     {
         if (_disposed && _port is null) return;
-        
-        await Task.CompletedTask; // Ensure async signature
-        
-        lock (_stateLock)
+        await _stateGate.WaitAsync().ConfigureAwait(false);
+        try
         {
             DisconnectCore(notify: true);
+        }
+        finally
+        {
+            _stateGate.Release();
         }
     }
 
-    public void Disconnect()
-    {
-        lock (_stateLock)
-        {
-            DisconnectCore(notify: true);
-        }
-    }
+    public void Disconnect() => DisconnectAsync().GetAwaiter().GetResult();
 
     private async Task<ScaleTestResult> ReadOnceAsync(string source, int timeoutMs, bool retryOnce)
     {
@@ -238,10 +183,6 @@ public sealed class ScaleService : IDisposable
                     .WaitAsync(TimeSpan.FromMilliseconds(timeoutMs))
                     .ConfigureAwait(false);
                 total.Stop();
-                
-                Interlocked.Increment(ref _successfulReads);
-                _lastSuccessAt = DateTimeOffset.UtcNow;
-                
                 return new ScaleTestResult(
                     true,
                     reading.Value,
@@ -254,7 +195,7 @@ public sealed class ScaleService : IDisposable
                 RemovePending(completion);
                 if (attempt < attempts)
                 {
-                    await Task.Delay(50).ConfigureAwait(false); // Reduced from 80ms
+                    await Task.Delay(80).ConfigureAwait(false);
                     continue;
                 }
             }
@@ -273,7 +214,6 @@ public sealed class ScaleService : IDisposable
         }
 
         total.Stop();
-        Interlocked.Increment(ref _failedReads);
         LastError = BuildTimeoutMessage(firstSentAt, timeoutMs, attempts);
         return new ScaleTestResult(false, null, LastError, _lastInvalidFrame, total.ElapsedMilliseconds);
     }
@@ -291,45 +231,43 @@ public sealed class ScaleService : IDisposable
             return false;
         }
 
-        await Task.CompletedTask; // Ensure async signature
-        
-        lock (_writeLock)
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            try
+            if (skipIfPending && HasLivePending()) return false;
+
+            if (clearStale)
             {
-                if (skipIfPending && HasLivePending()) return false;
-
-                if (clearStale)
-                {
-                    CancelPending();
-                    ResetDecoder();
-                    try { port.DiscardInBuffer(); } catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
-                }
-
-                var pending = new PendingRead(source, DateTimeOffset.UtcNow, completion);
-                lock (_pendingLock)
-                {
-                    PurgeExpiredPendingLocked();
-                    if (skipIfPending && _pending is not null) return false;
-                    _pending = pending;
-                }
-
-                var command = _settings.RequestCommand ?? string.Empty;
-                if (command.Length > 0)
-                {
-                    // Use direct byte writing for better performance
-                    var bytes = Encoding.ASCII.GetBytes(command);
-                    port.Write(bytes, 0, bytes.Length);
-                }
-                return true;
+                CancelPending();
+                ResetDecoder();
+                try { port.DiscardInBuffer(); } catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
             }
-            catch (Exception ex)
+
+            var pending = new PendingRead(source, DateTimeOffset.UtcNow, completion);
+            lock (_pendingGate)
             {
-                if (completion is not null) RemovePending(completion);
-                LastError = DescribeException(ex, _settings.Port);
-                Error?.Invoke(LastError);
-                return false;
+                PurgeExpiredPendingLocked();
+                if (skipIfPending && _pending is not null) return false;
+                _pending = pending;
             }
+
+            var command = _settings.RequestCommand ?? string.Empty;
+            if (command.Length > 0)
+            {
+                port.Write(command);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (completion is not null) RemovePending(completion);
+            LastError = DescribeException(ex, _settings.Port);
+            Error?.Invoke(LastError);
+            return false;
+        }
+        finally
+        {
+            _writeGate.Release();
         }
     }
 
@@ -338,37 +276,24 @@ public sealed class ScaleService : IDisposable
         try
         {
             if (sender is not SerialPort port || !ReferenceEquals(port, _port) || !port.IsOpen) return;
-            
-            // Read available bytes directly
-            var bytesToRead = port.BytesToRead;
-            if (bytesToRead <= 0) return;
-            
-            var buffer = ArrayPool<byte>.Shared.Rent(bytesToRead);
-            try
-            {
-                var bytesRead = port.Read(buffer, 0, bytesToRead);
-                if (bytesRead == 0) return;
+            var chunk = port.ReadExisting();
+            if (string.IsNullOrEmpty(chunk)) return;
 
-                _lastBytesAt = DateTimeOffset.UtcNow;
-                IReadOnlyList<string> frames;
-                bool hasPartial;
-                int generation;
-                
-                lock (_decoderLock)
-                {
-                    frames = _decoder.Push(buffer.AsSpan(0, bytesRead));
-                    hasPartial = _decoder.HasBufferedData;
-                    generation = Interlocked.Increment(ref _idleGeneration);
-                }
-
-                foreach (var frame in frames) ProcessFrame(frame);
-                if (hasPartial)
-                    _ = FlushIdleAsync(generation, FrameIdleMs(_settings));
-            }
-            finally
+            _lastBytesAt = DateTimeOffset.UtcNow;
+            var bytes = Encoding.ASCII.GetBytes(chunk);
+            IReadOnlyList<string> frames;
+            bool hasPartial;
+            int generation;
+            lock (_decoderGate)
             {
-                ArrayPool<byte>.Shared.Return(buffer);
+                frames = _decoder.Push(bytes);
+                hasPartial = _decoder.HasBufferedData;
+                generation = Interlocked.Increment(ref _idleGeneration);
             }
+
+            foreach (var frame in frames) ProcessFrame(frame);
+            if (hasPartial)
+                _ = FlushIdleAsync(generation, FrameIdleMs(_settings));
         }
         catch (Exception ex)
         {
@@ -385,7 +310,7 @@ public sealed class ScaleService : IDisposable
             if (generation != Volatile.Read(ref _idleGeneration)) return;
 
             string? frame;
-            lock (_decoderLock)
+            lock (_decoderGate)
             {
                 if (generation != Volatile.Read(ref _idleGeneration)) return;
                 frame = _decoder.FlushIdle();
@@ -408,7 +333,7 @@ public sealed class ScaleService : IDisposable
         }
 
         PendingRead? request;
-        lock (_pendingLock)
+        lock (_pendingGate)
         {
             PurgeExpiredPendingLocked();
             request = _pending;
@@ -495,7 +420,7 @@ public sealed class ScaleService : IDisposable
 
     private void ResetDecoder()
     {
-        lock (_decoderLock)
+        lock (_decoderGate)
         {
             _decoder.Reset();
             Interlocked.Increment(ref _idleGeneration);
@@ -504,7 +429,7 @@ public sealed class ScaleService : IDisposable
 
     private bool HasLivePending()
     {
-        lock (_pendingLock)
+        lock (_pendingGate)
         {
             PurgeExpiredPendingLocked();
             return _pending is not null;
@@ -521,7 +446,7 @@ public sealed class ScaleService : IDisposable
 
     private void CancelPending()
     {
-        lock (_pendingLock)
+        lock (_pendingGate)
         {
             _pending?.Completion?.TrySetCanceled();
             _pending = null;
@@ -530,7 +455,7 @@ public sealed class ScaleService : IDisposable
 
     private void RemovePending(TaskCompletionSource<ScaleReading> completion)
     {
-        lock (_pendingLock)
+        lock (_pendingGate)
         {
             if (_pending is not null && ReferenceEquals(_pending.Completion, completion))
                 _pending = null;
@@ -584,8 +509,8 @@ public sealed class ScaleService : IDisposable
         DtrEnable = false,
         RtsEnable = false,
         NewLine = "\r\n",
-        ReadBufferSize = 8192, // Increased from 4096
-        WriteBufferSize = 4096, // Increased from 2048
+        ReadBufferSize = 4096,
+        WriteBufferSize = 2048,
         ReceivedBytesThreshold = 1
     };
 
@@ -594,7 +519,7 @@ public sealed class ScaleService : IDisposable
         var parityBits = s.Parity.Equals("None", StringComparison.OrdinalIgnoreCase) ? 0d : 1d;
         var bitsPerCharacter = 1d + s.DataBits + parityBits + s.StopBits;
         var charMs = 1000d * bitsPerCharacter / Math.Max(300, s.BaudRate);
-        return Math.Clamp((int)Math.Ceiling(charMs * 6d), 10, 200); // Tightened range
+        return Math.Clamp((int)Math.Ceiling(charMs * 6d), 12, 250);
     }
 
     private static bool SerialConfigEquals(ScaleSettings a, ScaleSettings b) =>
@@ -640,7 +565,8 @@ public sealed class ScaleService : IDisposable
         if (_disposed) return;
         _disposed = true;
         DisconnectCore(notify: false);
-        _decoder.Reset();
+        _stateGate.Dispose();
+        _writeGate.Dispose();
         GC.SuppressFinalize(this);
     }
 }

@@ -6,29 +6,17 @@ namespace GoldBar.Windows.Core;
 /// Incrementally reconstructs ASCII frames received from a serial scale.
 /// Supports CR/LF terminated frames, STX/ETX framed packets, fragmented reads,
 /// and a bounded idle-flush fallback for devices that do not send a terminator.
-/// 
-/// Optimized for high-frequency readings with minimal allocations.
 /// </summary>
 public sealed class ScaleFrameDecoder
 {
     private const int MaxFrameLength = 256;
     private readonly StringBuilder _buffer = new(MaxFrameLength);
-    
-    // Reusable list to avoid allocations on every Push call
-    private readonly List<string> _frames = new(4);
-    
-    // Stabilizer for rapid readings (optional, used externally)
-    private readonly MedianStabilizer _stabilizer = new(3);
 
     public bool HasBufferedData => _buffer.Length > 0;
 
-    /// <summary>
-    /// Push bytes into the decoder and extract complete frames.
-    /// Uses the internal reusable list to avoid allocations.
-    /// </summary>
     public IReadOnlyList<string> Push(ReadOnlySpan<byte> bytes)
     {
-        _frames.Clear();
+        var frames = new List<string>();
 
         foreach (var b in bytes)
         {
@@ -39,12 +27,12 @@ public sealed class ScaleFrameDecoder
                     break;
 
                 case 0x03: // ETX: finish the current explicit frame.
-                    FlushTo(_frames);
+                    FlushTo(frames);
                     break;
 
                 case (byte)'\r':
                 case (byte)'\n':
-                    FlushTo(_frames);
+                    FlushTo(frames);
                     break;
 
                 case 0x00:
@@ -57,22 +45,16 @@ public sealed class ScaleFrameDecoder
                     if (b == (byte)'\t' || b is >= 0x20 and <= 0x7E)
                     {
                         if (_buffer.Length >= MaxFrameLength)
-                        {
-                            // Corrupt/unbounded frame: flush what we have and resync
-                            FlushTo(_frames);
-                        }
+                            _buffer.Clear(); // Corrupt/unbounded frame: resynchronize safely.
                         _buffer.Append((char)b);
                     }
                     break;
             }
         }
 
-        return _frames;
+        return frames;
     }
 
-    /// <summary>
-    /// Flush buffered data as a complete frame (called on idle timeout).
-    /// </summary>
     public string? FlushIdle()
     {
         if (_buffer.Length == 0) return null;
@@ -82,16 +64,6 @@ public sealed class ScaleFrameDecoder
     }
 
     public void Reset() => _buffer.Clear();
-
-    /// <summary>
-    /// Get stabilized weight using median filter for smoother readings.
-    /// </summary>
-    public double PushStabilized(double value) => _stabilizer.Push(value);
-    
-    /// <summary>
-    /// Reset the stabilizer state.
-    /// </summary>
-    public void ResetStabilizer() => _stabilizer.Reset();
 
     private void FlushTo(List<string> frames)
     {
