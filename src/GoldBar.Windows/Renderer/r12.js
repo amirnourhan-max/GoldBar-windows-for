@@ -22,11 +22,20 @@
 
       /* Let the approved dashboard consume the extra virtual width instead of leaving
          it unused around the fixed 1536px reference canvas. */
-      .workspace-body{grid-template-columns:minmax(886px,1fr) 287px!important}
+      .workspace-body{grid-template-columns:minmax(886px,1fr) 295px!important}
       .workspace-body.full-center{grid-template-columns:1fr!important}
       .center{width:100%!important;max-width:none!important}
       .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
       .bottom-grid{grid-template-columns:minmax(250px,1fr) minmax(250px,.98fr) minmax(290px,1.18fr)!important}
+
+      /* Maximized windows: the virtual canvas grows wider than 1536px, so every
+         dashboard block must stretch with the center column. Fixed widths here made
+         the quick-entry card and the bottom cards hug the settings panel and leave
+         a large dead gap on wide/maximized windows. */
+      .quick-card{width:100%!important;max-width:none!important}
+      .bottom-grid{width:100%!important;max-width:none!important}
+      .action-row{width:auto!important;grid-template-columns:1.16fr 1fr .93fr!important}
+      .quick-card .action-row{left:20px!important;right:20px!important}
 
       /* Left scale card: r5 adds test/result rows dynamically. Keep all of those rows
          inside the card and above the version/status area at every supported scale. */
