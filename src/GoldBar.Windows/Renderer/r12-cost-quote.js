@@ -232,7 +232,7 @@
         <div class="r12-cost-head"><div><h3>هزینه عیار</h3><p>محاسبه هزینه نقره، فرق شمش، بار، کچ و رزین به معادل گرم طلا — مقادیر کچ/رزین دستی یا خودکار</p></div><div class="r12-cost-badge">مبنای مثقال 4.3318 g</div></div>
         <div class="r12-cost-fields">
           <div class="r12-cost-field"><label>مظنه طلا — هر مثقال</label><div class="r12-cost-input-row"><input id="r12GoldQuote" inputmode="decimal" autocomplete="off" placeholder="0"><button id="r12FetchQuote" class="r12-fetch-btn">دریافت مظنه</button></div><div id="r12QuoteStatus" class="r12-quote-status">ورود دستی یا دریافت از سایت</div></div>
-          <div class="r12-cost-field"><label>مظنه نقره — هر گرم</label><input id="r12SilverQuote" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+          <div class="r12-cost-field"><label>مظنه نقره — هر گرم</label><div class="r12-cost-input-row"><input id="r12SilverQuote" inputmode="decimal" autocomplete="off" placeholder="0"><button id="r12FetchSilver" class="r12-fetch-btn">دریافت نقره</button></div><div id="r12SilverQuoteStatus" class="r12-quote-status">ورود دستی یا دریافت از سایت</div></div>
           <div class="r12-cost-field"><label>فرق شمش — گرم در هر کیلو</label><input id="r12BarDifference" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>هر گرم بار</label><input id="r12AlloyPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>هر گرم کچ</label><input id="r12CutchPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
@@ -269,6 +269,7 @@
       bindPlainDecimal($('#r12CutchWeight'));
       bindPlainDecimal($('#r12ResinWeight'));
       $('#r12FetchQuote')?.addEventListener('click', () => fetchQuote(true));
+      $('#r12FetchSilver')?.addEventListener('click', () => fetchSilverQuote(true));
       renderCost();
       setTimeout(() => fetchQuote(false), 180);
     }
@@ -302,6 +303,35 @@
       }
     } catch (error) {
       setQuoteStatus(error?.message || 'مظنه موجود نیست', 'error');
+      if (userInitiated && !window.__goldbarR4SelfTest) console.warn(error);
+    } finally {
+      button.classList.remove('busy');
+      button.textContent = old;
+    }
+  }
+
+  async function fetchSilverQuote(userInitiated) {
+    const button = $('#r12FetchSilver');
+    if (!button || button.classList.contains('busy')) return;
+    button.classList.add('busy');
+    const old = button.textContent;
+    button.textContent = 'در حال دریافت...';
+    const status = $('#r12SilverQuoteStatus');
+    const setSilverStatus = (message, cls = '') => { if (status) { status.className = `r12-quote-status ${cls}`.trim(); status.textContent = message; } };
+    setSilverStatus('در حال دریافت قیمت نقره از سایت...');
+    try {
+      const result = await r4Request('silver-quote:fetch', null, 35000);
+      if (result?.ok && Number(result.quote) > 0) {
+        const input = $('#r12SilverQuote');
+        if (input) input.value = grouped(String(result.quote));
+        const time = result.updatedAt ? new Date(result.updatedAt).toLocaleTimeString('fa-IR', {hour:'2-digit',minute:'2-digit'}) : '';
+        setSilverStatus(`دریافت از سایت${time ? ` — ${time}` : ''}`, 'ok');
+        renderCost();
+      } else {
+        setSilverStatus(result?.message || 'مظنه نقره موجود نیست', 'error');
+      }
+    } catch (error) {
+      setSilverStatus(error?.message || 'مظنه نقره موجود نیست', 'error');
       if (userInitiated && !window.__goldbarR4SelfTest) console.warn(error);
     } finally {
       button.classList.remove('busy');
@@ -370,6 +400,59 @@
     return true;
   }
 
+  async function loadSilverQuoteSettings() {
+    try {
+      const s = await r4Request('silver-quote:get-settings');
+      if ($('#r12SilverQuoteUrl')) $('#r12SilverQuoteUrl').value = s?.url || 'https://nogreh.com/price-list/';
+    } catch { }
+  }
+
+  function buildSilverQuoteSettings() {
+    const form = $('.settings-form');
+    if (!form || $('#r12SilverQuoteSettings')) return false;
+    const gold = $('#r12QuoteSettings');
+    if (!gold) return false;
+    const wrap = document.createElement('section');
+    wrap.id = 'r12SilverQuoteSettings';
+    wrap.className = 'r12-quote-settings';
+    wrap.innerHTML = `
+      <h4>تنظیمات مظنه نقره</h4>
+      <div class="r12-quote-setting"><label>لینک منبع مظنه نقره</label><input id="r12SilverQuoteUrl" type="text" autocomplete="off" value="https://nogreh.com/price-list/"></div>
+      <div class="r12-quote-actions"><button id="r12SilverQuoteSave" class="r12-quote-save">ذخیره تنظیمات مظنه نقره</button><button id="r12SilverQuoteTest" class="r12-quote-test">تست دریافت مظنه نقره</button></div>
+      <div id="r12SilverQuoteSettingsStatus" class="r12-quote-settings-status">صفحه لیست قیمت نقره عمومی است و نیازی به ورود ندارد.</div>`;
+    gold.after(wrap);
+    $('#r12SilverQuoteSave')?.addEventListener('click', async e => {
+      e.preventDefault();
+      const status = $('#r12SilverQuoteSettingsStatus');
+      try {
+        await r4Request('silver-quote:save-settings', { url: $('#r12SilverQuoteUrl')?.value || '' });
+        if (status) { status.className='r12-quote-settings-status ok'; status.textContent='تنظیمات مظنه نقره ذخیره شد ✓'; }
+      } catch (error) {
+        if (status) { status.className='r12-quote-settings-status error'; status.textContent=error?.message || 'خطا در ذخیره تنظیمات'; }
+      }
+    });
+    $('#r12SilverQuoteTest')?.addEventListener('click', async e => {
+      e.preventDefault();
+      const status = $('#r12SilverQuoteSettingsStatus');
+      try {
+        await r4Request('silver-quote:save-settings', { url: $('#r12SilverQuoteUrl')?.value || '' });
+        const result = await r4Request('silver-quote:fetch', null, 35000);
+        if (result?.ok && Number(result.quote) > 0) {
+          if (status) { status.className='r12-quote-settings-status ok'; status.textContent=`مظنه نقره دریافت شد: ${grouped(String(result.quote))} ✓`; }
+          const input = $('#r12SilverQuote');
+          if (input) input.value = grouped(String(result.quote));
+          renderCost();
+        } else if (status) {
+          status.className='r12-quote-settings-status error'; status.textContent=result?.message || 'مظنه نقره موجود نیست';
+        }
+      } catch (error) {
+        if (status) { status.className='r12-quote-settings-status error'; status.textContent=error?.message || 'مظنه نقره موجود نیست'; }
+      }
+    });
+    loadSilverQuoteSettings();
+    return true;
+  }
+
   function installHooks() {
     $$('.nav-item').forEach(btn => {
       if (btn.dataset.r12QuoteHook === '1') return;
@@ -377,7 +460,8 @@
       btn.addEventListener('click', () => {
         setTimeout(buildCostCard, 40);
         setTimeout(buildQuoteSettings, 40);
-        setTimeout(() => { buildCostCard(); buildQuoteSettings(); }, 180);
+        setTimeout(buildSilverQuoteSettings, 60);
+        setTimeout(() => { buildCostCard(); buildQuoteSettings(); buildSilverQuoteSettings(); }, 180);
       }, true);
     });
   }
@@ -400,11 +484,12 @@
     installStyles();
     installHooks();
     buildQuoteSettings();
+    buildSilverQuoteSettings();
     buildCostCard();
     installProbe();
     if (!observer) {
       observer = new MutationObserver(() => {
-        installHooks(); buildQuoteSettings();
+        installHooks(); buildQuoteSettings(); buildSilverQuoteSettings();
         if ($('.dash-title span:last-child')?.textContent?.trim() === 'محاسبه سریع') requestAnimationFrame(buildCostCard);
       });
       observer.observe(document.body, { childList:true, subtree:true });

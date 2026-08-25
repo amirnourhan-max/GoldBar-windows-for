@@ -15,6 +15,8 @@ public partial class MainWindow
     private readonly ReportImportService _r4ReportImportService = new();
     private readonly GoldQuoteSettingsStore _quoteStore = new();
     private readonly GoldQuoteService _quoteService = new();
+    private readonly SilverQuoteSettingsStore _silverQuoteStore = new();
+    private readonly SilverQuoteService _silverQuoteService = new();
     private bool _r4MessageHooked;
     private bool _r4CloseApproved;
     private bool _r4ClosingBusy;
@@ -126,6 +128,9 @@ public partial class MainWindow
                 "quote:get-settings" => await QuoteGetSettingsAsync(),
                 "quote:save-settings" => await QuoteSaveSettingsAsync(payload),
                 "quote:fetch" => await QuoteFetchAsync(),
+                "silver-quote:get-settings" => await SilverQuoteGetSettingsAsync(),
+                "silver-quote:save-settings" => await SilverQuoteSaveSettingsAsync(payload),
+                "silver-quote:fetch" => await SilverQuoteFetchAsync(),
                 _ => throw new InvalidOperationException($"Unknown r4 action: {action}")
             };
             R4Reply(id, true, result, null);
@@ -164,6 +169,34 @@ public partial class MainWindow
             return new GoldQuoteResult(false, null, "مظنه موجود نیست");
         var settings = await _quoteStore.LoadAsync();
         return await _quoteService.FetchAsync(settings);
+    }
+
+    private async Task<object> SilverQuoteGetSettingsAsync()
+    {
+        var s = await _silverQuoteStore.GetPublicAsync();
+        return new { url = s.Url, username = s.Username, hasPassword = s.HasPassword };
+    }
+
+    private async Task<object> SilverQuoteSaveSettingsAsync(JsonElement payload)
+    {
+        var current = await _silverQuoteStore.LoadAsync();
+        var url = payload.TryGetProperty("url", out var u) ? u.GetString() : current.Url;
+        var next = new SilverQuoteSettings
+        {
+            Url = string.IsNullOrWhiteSpace(url) ? current.Url : url!,
+            Username = current.Username,
+            Password = current.Password
+        }.Normalize();
+        await _silverQuoteStore.SaveAsync(next);
+        return new { url = next.Url, username = next.Username, hasPassword = !string.IsNullOrWhiteSpace(next.Password) };
+    }
+
+    private async Task<object> SilverQuoteFetchAsync()
+    {
+        if (_runUiSelfTest)
+            return new SilverQuoteResult(false, null, "مظنه نقره موجود نیست");
+        var settings = await _silverQuoteStore.LoadAsync();
+        return await _silverQuoteService.FetchAsync(settings);
     }
 
     private object R11ChangePassword()
