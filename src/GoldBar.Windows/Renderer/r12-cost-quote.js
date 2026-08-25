@@ -75,8 +75,8 @@
   }
 
   function readState() {
-    try { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'', ...JSON.parse(sessionStorage.getItem(COST_KEY) || '{}') }; }
-    catch { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'' }; }
+    try { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'', cutchWeight:'', resinWeight:'', ...JSON.parse(sessionStorage.getItem(COST_KEY) || '{}') }; }
+    catch { return { goldQuote:'', silverQuote:'', barDifference:'', alloyPrice:'', cutchPrice:'', resinPrice:'', cutchWeight:'', resinWeight:'' }; }
   }
 
   function saveState() {
@@ -86,7 +86,9 @@
       barDifference: cleanNumber($('#r12BarDifference')?.value),
       alloyPrice: cleanNumber($('#r12AlloyPrice')?.value),
       cutchPrice: cleanNumber($('#r12CutchPrice')?.value),
-      resinPrice: cleanNumber($('#r12ResinPrice')?.value)
+      resinPrice: cleanNumber($('#r12ResinPrice')?.value),
+      cutchWeight: cleanNumber($('#r12CutchWeight')?.value),
+      resinWeight: cleanNumber($('#r12ResinWeight')?.value)
     };
     sessionStorage.setItem(COST_KEY, JSON.stringify(state));
   }
@@ -115,6 +117,8 @@
     const alloyPrice = numberOf($('#r12AlloyPrice')?.value);
     const cutchPrice = numberOf($('#r12CutchPrice')?.value);
     const resinPrice = numberOf($('#r12ResinPrice')?.value);
+    const cutchWeightInput = numberOf($('#r12CutchWeight')?.value);
+    const resinWeightInput = numberOf($('#r12ResinWeight')?.value);
     const entries = readEntries();
     const context = detectAssayContext();
 
@@ -144,10 +148,10 @@
     // User definition: "1" means one gram per each 1,000 g of high-assay gold.
     const barDifferenceGold = highAssayWeight * barDifference / 1000;
     const alloyEquivalentGold = nonSilverRequired * alloyPrice / goldPricePerGram;
-    // Cutch and resin: convert to gold grams using the same formula as bar
-    // These are additional materials with their own weights and prices
-    const cutchWeight = Number(alloy.fourPerThousand) || 0;
-    const resinWeight = Number(alloy.finalOtherAlloy) || 0;
+    // Cutch and resin: convert to gold grams using the same formula as bar.
+    // If the user entered an explicit amount in grams, use it; otherwise derive from the alloy breakdown.
+    const cutchWeight = Number.isFinite(cutchWeightInput) && cutchWeightInput > 0 ? cutchWeightInput : (Number(alloy.fourPerThousand) || 0);
+    const resinWeight = Number.isFinite(resinWeightInput) && resinWeightInput > 0 ? resinWeightInput : (Number(alloy.finalOtherAlloy) || 0);
     const cutchEquivalentGold = Number.isFinite(cutchPrice) && cutchPrice > 0 ? cutchWeight * cutchPrice / goldPricePerGram : 0;
     const resinEquivalentGold = Number.isFinite(resinPrice) && resinPrice > 0 ? resinWeight * resinPrice / goldPricePerGram : 0;
     const totalGoldCost = silverEquivalentGold + barDifferenceGold + alloyEquivalentGold + cutchEquivalentGold + resinEquivalentGold;
@@ -225,7 +229,7 @@
       card.id = 'r12CostCard';
       card.className = 'r12-cost-card';
       card.innerHTML = `
-        <div class="r12-cost-head"><div><h3>هزینه عیار</h3><p>محاسبه هزینه نقره، فرق شمش، بار، کچ و رزین به معادل گرم طلا</p></div><div class="r12-cost-badge">مبنای مثقال 4.3318 g</div></div>
+        <div class="r12-cost-head"><div><h3>هزینه عیار</h3><p>محاسبه هزینه نقره، فرق شمش، بار، کچ و رزین به معادل گرم طلا — مقادیر کچ/رزین دستی یا خودکار</p></div><div class="r12-cost-badge">مبنای مثقال 4.3318 g</div></div>
         <div class="r12-cost-fields">
           <div class="r12-cost-field"><label>مظنه طلا — هر مثقال</label><div class="r12-cost-input-row"><input id="r12GoldQuote" inputmode="decimal" autocomplete="off" placeholder="0"><button id="r12FetchQuote" class="r12-fetch-btn">دریافت مظنه</button></div><div id="r12QuoteStatus" class="r12-quote-status">ورود دستی یا دریافت از سایت</div></div>
           <div class="r12-cost-field"><label>مظنه نقره — هر گرم</label><input id="r12SilverQuote" inputmode="decimal" autocomplete="off" placeholder="0"></div>
@@ -233,6 +237,8 @@
           <div class="r12-cost-field"><label>هر گرم بار</label><input id="r12AlloyPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>هر گرم کچ</label><input id="r12CutchPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
           <div class="r12-cost-field"><label>هر گرم رزین</label><input id="r12ResinPrice" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+          <div class="r12-cost-field"><label>مقدار کچ — گرم</label><input id="r12CutchWeight" inputmode="decimal" autocomplete="off" placeholder="خودکار"></div>
+          <div class="r12-cost-field"><label>مقدار رزین — گرم</label><input id="r12ResinWeight" inputmode="decimal" autocomplete="off" placeholder="خودکار"></div>
         </div>
         <div class="r12-cost-results">
           <div class="r12-cost-result"><span>قیمت هر گرم طلا</span><b id="r12GoldGramPrice">—</b></div>
@@ -252,12 +258,16 @@
       $('#r12AlloyPrice').value = grouped(state.alloyPrice);
       $('#r12CutchPrice').value = grouped(state.cutchPrice);
       $('#r12ResinPrice').value = grouped(state.resinPrice);
+      $('#r12CutchWeight').value = state.cutchWeight || '';
+      $('#r12ResinWeight').value = state.resinWeight || '';
       bindMoneyInput($('#r12GoldQuote'));
       bindMoneyInput($('#r12SilverQuote'));
       bindPlainDecimal($('#r12BarDifference'));
       bindMoneyInput($('#r12AlloyPrice'));
       bindMoneyInput($('#r12CutchPrice'));
       bindMoneyInput($('#r12ResinPrice'));
+      bindPlainDecimal($('#r12CutchWeight'));
+      bindPlainDecimal($('#r12ResinWeight'));
       $('#r12FetchQuote')?.addEventListener('click', () => fetchQuote(true));
       renderCost();
       setTimeout(() => fetchQuote(false), 180);
