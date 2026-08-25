@@ -47,7 +47,7 @@ public sealed class SilverQuoteService
             for (var attempt = 0; attempt < 8; attempt++)
             {
                 var price = await TryExtractPriceAsync(web);
-                if (price is > 0) return Success(price);
+                if (price is { } foundPrice && foundPrice > 0) return Success(foundPrice);
                 lastPrice = price ?? lastPrice;
                 await Task.Delay(450);
             }
