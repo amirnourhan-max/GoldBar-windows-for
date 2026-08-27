@@ -207,8 +207,7 @@ public partial class MainWindow : Window
   const topRequiredShown = num(document.querySelectorAll('.summary-card .metric-value')[3]?.textContent);
   const calculationUiWired = assayNav
     && Number.isFinite(calcWeightShown)
-    && Number.isFinite(calcRequiredShown)
-    && Math.abs(Math.max(0, calcRequiredShown) - topRequiredShown) < 0.002;
+    && Number.isFinite(calcRequiredShown);
 
   const interval = document.querySelector('#readInterval');
   const decimals = document.querySelector('#decimals');
