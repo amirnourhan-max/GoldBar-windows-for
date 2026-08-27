@@ -139,7 +139,7 @@
       const firstMiniLabel = cards[1].querySelector('.mini-stats > div:first-child span');
       if (firstMiniLabel) firstMiniLabel.textContent = 'نقره مورد نیاز (g)';
       const wideLabel = cards[1].querySelector('.wide-stat span');
-      if (wideLabel) wideLabel.textContent = 'کل بار مورد نیاز (g)';
+      if (wideLabel) wideLabel.textContent = 'بار بدون نقره (g)';
     }
   }
 
@@ -183,9 +183,9 @@
           ? result.silverRequired
           : 0;
         setText(stats[0], formatNumber(shownSilver, 3));
-        setText(stats[1], formatNumber(summary.weight || 0, 3));
+        setText(stats[1], formatNumber(Number.isFinite(result.nonSilverRequired) ? result.nonSilverRequired : 0, 3));
         totalAlloy = result.totalAlloyRequired;
-        setText(required, Number.isFinite(totalAlloy) ? formatNumber(totalAlloy, 3) : '0');
+        setText(required, Number.isFinite(result.nonSilverRequired) ? formatNumber(result.nonSilverRequired, 3) : '0');
         cards[1].dataset.silverRequired = Number.isFinite(result.silverRequired) ? String(result.silverRequired) : '';
         cards[1].dataset.nonSilverRequired = Number.isFinite(result.nonSilverRequired) ? String(result.nonSilverRequired) : '';
         cards[1].dataset.fourPerThousand = Number.isFinite(result.fourPerThousand) ? String(result.fourPerThousand) : '';
@@ -195,8 +195,8 @@
       const summaryCards = $$('.summary-card .metric-value');
       if (summaryCards[3]) {
         // A negative result means no alloy addition is required; the dashboard requirement is therefore zero.
-        const shown = Number.isFinite(totalAlloy) ? Math.max(0, totalAlloy) : 0;
-        setText(summaryCards[3], formatNumber(shown, 3));
+        const alloyNeeded = Number.isFinite(totalAlloy) ? Math.max(0, totalAlloy) : 0;
+        setText(summaryCards[3], formatNumber(summary.weight + alloyNeeded, 3));
       }
     } finally {
       recalculating = false;

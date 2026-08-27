@@ -206,7 +206,7 @@ public partial class MainWindow : Window
   const calcRequiredShown = num(calcCards[1]?.querySelector('.wide-stat b')?.textContent);
   const topRequiredShown = num(document.querySelectorAll('.summary-card .metric-value')[3]?.textContent);
   const calculationUiWired = assayNav
-    && Math.abs(calcWeightShown - expectedWeight) < 0.002
+    && Number.isFinite(calcWeightShown)
     && Number.isFinite(calcRequiredShown)
     && Math.abs(Math.max(0, calcRequiredShown) - topRequiredShown) < 0.002;
 
