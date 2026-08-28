@@ -234,7 +234,7 @@
       grid.className = 'r5-silver-grid';
       grid.innerHTML = `
         <div class="r5-silver-stat"><span>نقره مورد نیاز (g)</span><b id="r5SilverRequired">0</b></div>
-        <div class="r5-silver-stat"><span>بار بدون نقره (g)</span><b id="r5NonSilver">0</b></div>`;
+        <div class="r5-silver-stat"><span>کل بار مورد نیاز (g)</span><b id="r5NonSilver">0</b></div>`;
       card.appendChild(grid);
     }
 
@@ -270,7 +270,7 @@
       if (el) el.textContent = Number.isFinite(value) ? formatNumber(value, 3) : '0';
     };
     set('r5SilverRequired', result.silverRequired);
-    set('r5NonSilver', result.nonSilverRequired);
+    set('r5NonSilver', result.totalAlloyRequired);
     // Also update the calc-card second mini-stat (bar needed)
     const bBars = card.querySelectorAll('.mini-stats b');
     if (bBars[1]) bBars[1].textContent = Number.isFinite(result.totalAlloyRequired) ? formatNumber(result.totalAlloyRequired, 3) : '0';

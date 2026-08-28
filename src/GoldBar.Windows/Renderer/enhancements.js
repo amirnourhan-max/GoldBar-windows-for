@@ -139,7 +139,7 @@
       const firstMiniLabel = cards[1].querySelector('.mini-stats > div:first-child span');
       if (firstMiniLabel) firstMiniLabel.textContent = 'نقره مورد نیاز (g)';
       const wideLabel = cards[1].querySelector('.wide-stat span');
-      if (wideLabel) wideLabel.textContent = 'بار بدون نقره (g)';
+      if (wideLabel) wideLabel.textContent = 'کل بار مورد نیاز (g)';
     }
   }
 
@@ -185,7 +185,7 @@
         setText(stats[0], formatNumber(shownSilver, 3));
         setText(stats[1], formatNumber(Number.isFinite(result.nonSilverRequired) ? result.nonSilverRequired : 0, 3));
         totalAlloy = result.totalAlloyRequired;
-        setText(required, Number.isFinite(result.nonSilverRequired) ? formatNumber(result.nonSilverRequired, 3) : '0');
+        setText(required, Number.isFinite(result.totalAlloyRequired) ? formatNumber(result.totalAlloyRequired, 3) : '0');
         cards[1].dataset.silverRequired = Number.isFinite(result.silverRequired) ? String(result.silverRequired) : '';
         cards[1].dataset.nonSilverRequired = Number.isFinite(result.nonSilverRequired) ? String(result.nonSilverRequired) : '';
         cards[1].dataset.fourPerThousand = Number.isFinite(result.fourPerThousand) ? String(result.fourPerThousand) : '';
@@ -247,7 +247,11 @@
 
     const summary = $('.summary-grid');
     if (summary) {
-      const observer = new MutationObserver(() => setTimeout(recalculateCards, 0));
+      let summaryObserverTimer = null;
+      const observer = new MutationObserver(() => {
+        if (summaryObserverTimer) return;
+        summaryObserverTimer = setTimeout(() => { summaryObserverTimer = null; recalculateCards(); }, 80);
+      });
       observer.observe(summary, { subtree: true, childList: true, characterData: true });
     }
   }
