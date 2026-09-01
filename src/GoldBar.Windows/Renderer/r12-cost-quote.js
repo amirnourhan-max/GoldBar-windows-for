@@ -219,10 +219,9 @@
 
   function buildCostCard() {
     const title = $('.dash-title span:last-child')?.textContent?.trim();
-    if (title !== 'محاسبه سریع') return false;
+    if (title !== 'هزینه') return false;
     const host = $('#pageHost');
-    const tools = host?.querySelector('.canonical-tools');
-    if (!tools) return false;
+    if (!host) return false;
     let card = $('#r12CostCard');
     if (!card) {
       card = document.createElement('section');
@@ -250,7 +249,7 @@
         </div>
         <div id="r12CostTotalWrap" class="r12-cost-total"><span>جمع هزینه عیار (گرم طلا)</span><b><span id="r12CostTotal">—</span> g</b></div>
         <div class="r12-cost-note">فرق شمش طبق تعریف شما محاسبه می‌شود: عدد 1 یعنی 1 گرم به ازای هر 1,000 گرم از آبشده‌های با عیار بالاتر از 900.</div>`;
-      tools.appendChild(card);
+      host.appendChild(card);
       const state = readState();
       $('#r12GoldQuote').value = grouped(state.goldQuote);
       $('#r12SilverQuote').value = grouped(state.silverQuote);
@@ -490,7 +489,7 @@
     if (!observer) {
       observer = new MutationObserver(() => {
         installHooks(); buildQuoteSettings(); buildSilverQuoteSettings();
-        if ($('.dash-title span:last-child')?.textContent?.trim() === 'محاسبه سریع') requestAnimationFrame(buildCostCard);
+        if ($('.dash-title span:last-child')?.textContent?.trim() === 'هزینه') requestAnimationFrame(buildCostCard);
       });
       observer.observe(document.body, { childList:true, subtree:true });
     }

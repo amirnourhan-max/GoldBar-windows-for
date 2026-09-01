@@ -397,7 +397,7 @@
   function setNavActive(page) {
     const map = {
       dashboard: 'داشبورد', register: 'ثبت آبشده', melts: 'آبشده‌ها', assay: 'محاسبات عیار',
-      quickcalc: 'محاسبه سریع', reports: 'گزارش‌ها', settings: 'تنظیمات'
+      quickcalc: 'محاسبه سریع', cost: 'هزینه', reports: 'گزارش‌ها', settings: 'تنظیمات'
     };
     $$('.nav-item').forEach(btn => btn.classList.toggle('active', (btn.textContent || '').includes(map[page] || '')));
   }
@@ -479,6 +479,12 @@
         setHeader('محاسبه سریع', 'ورود سریع وزن و عیار با کیبورد یا ترازو');
         setTimeout(() => $('#weightInput')?.focus(), 0);
         break;
+      case 'cost':
+        host.classList.add('active');
+        if (settingsPanel) settingsPanel.style.display = 'none';
+        body?.classList.add('full-center');
+        setHeader('هزینه', 'محاسبه هزینه نقره، شمش، بار، کچ و رزین به معادل گرم طلا');
+        break;
       case 'reports':
         renderReportsPage();
         host.classList.add('active');
@@ -505,7 +511,7 @@
   function bindNavigation() {
     const pageByLabel = {
       'داشبورد': 'dashboard', 'ثبت آبشده': 'register', 'آبشده‌ها': 'melts',
-      'محاسبات عیار': 'assay', 'محاسبه سریع': 'quickcalc', 'گزارش‌ها': 'reports', 'تنظیمات': 'settings'
+      'محاسبات عیار': 'assay',      'محاسبه سریع': 'quickcalc', 'هزینه': 'cost', 'گزارش‌ها': 'reports', 'تنظیمات': 'settings'
     };
     $$('.nav-item').forEach(btn => {
       const label = btn.querySelector('span')?.textContent?.trim();
@@ -600,7 +606,7 @@
       && $$('.calc-card h3')[0]?.textContent.trim() === 'افزایش عیار'
       && $$('.calc-card h3')[1]?.textContent.trim() === 'عیار';
     const buttonsOk = Boolean($('#quickSave') && $('#quickClearAll') && $('.quick-card .action-row')?.querySelectorAll('button').length === 2);
-    const navOk = $$('.nav-item').length === 7;
+    const navOk = $$('.nav-item').length === 8;
     const numericOk = $$('.numeric-input').every(el => el.id === 'descriptionInput' || el.classList.contains('numeric-input'));
     return { ok: labelsOk && buttonsOk && navOk && numericOk, labelsOk, buttonsOk, navOk, numericOk };
   };
