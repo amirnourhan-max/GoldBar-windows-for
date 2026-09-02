@@ -270,7 +270,6 @@
       $('#r12FetchQuote')?.addEventListener('click', () => fetchQuote(true));
       $('#r12FetchSilver')?.addEventListener('click', () => fetchSilverQuote(true));
       renderCost();
-      setTimeout(() => fetchQuote(false), 180);
     }
     return true;
   }

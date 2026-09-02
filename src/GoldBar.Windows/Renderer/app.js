@@ -338,6 +338,8 @@
       .input-error{outline:2px solid #ff6565!important;box-shadow:0 0 0 3px rgba(255,101,101,.12)!important}
       .quick-card .action-row{justify-content:flex-start!important}
       .quick-card .action-row>button{min-width:150px}
+      .import-btn{background:rgba(242,196,91,.08)!important;border-color:rgba(242,196,91,.35)!important;color:#f2c45b!important;gap:10px}
+      .import-btn:hover{background:rgba(242,196,91,.16)!important;border-color:rgba(242,196,91,.55)!important}
       @media(max-width:900px){.report-grid{grid-template-columns:1fr}.melts-table{font-size:12px}}
     `;
     document.head.appendChild(style);
@@ -553,10 +555,52 @@
   bindQuickRegistration();
   renderAllDataViews();
 
+  async function importReportFromExcel() {
+    const btn = $('#importReportBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    try {
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>در حال ورود...</span>';
+      const result = await bridge.importReport();
+      if (!result?.ok) {
+        if (result?.cancelled) return;
+        throw new Error(result?.error || 'ورود گزارش انجام نشد.');
+      }
+      const newEntries = (result.entries || []).map(e => ({
+        id: e.id || makeId(),
+        weight: Number(e.weight),
+        assay: Number(e.assay),
+        description: String(e.description || ''),
+        createdAt: e.createdAt || new Date().toISOString()
+      }));
+      const existingIds = new Set(entries.map(e => e.id));
+      let added = 0;
+      for (const ne of newEntries) {
+        if (!existingIds.has(ne.id) && ne.weight > 0 && ne.assay > 0) {
+          entries.unshift(ne);
+          added++;
+        }
+      }
+      if (added > 0) {
+        saveEntries();
+        renderAllDataViews();
+        btn.innerHTML = '<i class="fa-solid fa-check"></i><span>' + added + ' مورد اضافه شد ✓</span>';
+      } else {
+        btn.innerHTML = '<i class="fa-solid fa-info-circle"></i><span>مورد جدیدی نبود</span>';
+      }
+      setTimeout(() => { btn.innerHTML = old; btn.disabled = false; }, 1800);
+    } catch (error) {
+      btn.innerHTML = '<i class="fa-solid fa-xmark"></i><span>' + (error?.message || 'خطا') + '</span>';
+      setTimeout(() => { btn.innerHTML = old; btn.disabled = false; }, 2500);
+    }
+  }
+
   $('#winMin')?.addEventListener('click', () => bridge.minimize());
   $('#winMax')?.addEventListener('click', () => bridge.maximizeToggle());
   $('#winClose')?.addEventListener('click', () => bridge.close());
 
+  $('#importReportBtn')?.addEventListener('click', () => importReportFromExcel());
   $('#readScale')?.addEventListener('click', readScale);
   $('#testScale')?.addEventListener('click', readScale);
   $('#autoReadToggle')?.addEventListener('click', e => setToggle(e.currentTarget, !e.currentTarget.classList.contains('on')));

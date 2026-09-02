@@ -154,6 +154,7 @@
     captureScale,
     chooseReportDirectory: () => request('report:chooseDirectory'),
     saveReport: report => request('report:save', report),
+    importReport: () => request('report:import'),
     onWeight: cb => on('scale:weight', cb),
     onScaleStatus: cb => on('scale:status', cb),
     onScaleError: cb => on('scale:error', cb)
