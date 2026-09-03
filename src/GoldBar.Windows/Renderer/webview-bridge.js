@@ -60,8 +60,21 @@
     document.body.appendChild(script);
   }
 
+  function loadPerformanceGuard() {
+    if (document.querySelector('script[data-goldbar-performance-guard]')) {
+      loadEnhancements();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'performance-guard.js';
+    script.dataset.goldbarPerformanceGuard = '1';
+    script.onload = loadEnhancements;
+    script.onerror = loadEnhancements;
+    document.body.appendChild(script);
+  }
+
   function afterDomReady() {
-    loadEnhancements();
+    loadPerformanceGuard();
   }
 
   if (document.readyState === 'loading') {
