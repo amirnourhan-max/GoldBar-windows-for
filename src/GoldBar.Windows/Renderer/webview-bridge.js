@@ -74,6 +74,7 @@
 
   let seq = 0;
   const pending = new Map();
+  const pendingR4 = new Map();
   const listeners = new Map();
 
   function request(action, payload = null) {
@@ -87,6 +88,20 @@
         pending.delete(id);
         reject(new Error(`Timeout: ${action}`));
       }, 10000);
+    });
+  }
+
+  function requestR4(action, payload = null, timeout = 30000) {
+    const id = `bridge-r4-${++seq}`;
+    return new Promise((resolve, reject) => {
+      pendingR4.set(id, { resolve, reject });
+      window.chrome.webview.postMessage({ kind: 'r4request', id, action, payload });
+      setTimeout(() => {
+        const p = pendingR4.get(id);
+        if (!p) return;
+        pendingR4.delete(id);
+        reject(new Error(`Timeout: ${action}`));
+      }, timeout);
     });
   }
 
@@ -124,6 +139,13 @@
       msg.ok === false ? p.reject(new Error(msg.error || 'Host error')) : p.resolve(msg.data);
       return;
     }
+    if (msg.kind === 'r4response') {
+      const p = pendingR4.get(msg.id);
+      if (!p) return;
+      pendingR4.delete(msg.id);
+      msg.ok === false ? p.reject(new Error(msg.error || 'Host error')) : p.resolve(msg.data);
+      return;
+    }
     if (msg.kind === 'event') dispatchHostEvent(msg.event, msg.data);
   });
 
@@ -154,7 +176,7 @@
     captureScale,
     chooseReportDirectory: () => request('report:chooseDirectory'),
     saveReport: report => request('report:save', report),
-    importReport: () => request('report:import'),
+    importReport: () => requestR4('report:import'),
     onWeight: cb => on('scale:weight', cb),
     onScaleStatus: cb => on('scale:status', cb),
     onScaleError: cb => on('scale:error', cb)
