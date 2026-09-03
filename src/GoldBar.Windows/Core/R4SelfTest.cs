@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Windows;
 using GoldBar.Windows.Models;
 using GoldBar.Windows.Services;
@@ -29,7 +30,11 @@ public static class R4SelfTest
                 [
                     new ReportEntry { Id = "1", Weight = 100.125, Assay = 750, Description = "نمونه اول", CreatedAt = DateTime.Now.AddMinutes(-1).ToString("O") },
                     new ReportEntry { Id = "2", Weight = 50.5, Assay = 740, Description = "نمونه دوم", CreatedAt = DateTime.Now.ToString("O") }
-                ]
+                ],
+                IncreaseAssay = new ReportSection { Fields = [new ReportField { Label = "شمش مورد نیاز", Value = "12.3", Unit = "g" }] },
+                Assay = new ReportSection { Fields = [new ReportField { Label = "کل بار مورد نیاز", Value = "22.4", Unit = "g" }] },
+                QuickCalculation = new ReportSection { Fields = [new ReportField { Label = "طلای 995", Value = "294.32", Unit = "g" }] },
+                AssayCost = new ReportSection { Fields = [new ReportField { Label = "جمع هزینه عیار", Value = "1.25", Unit = "g طلا" }] }
             };
             var saved = new ReportService().SaveXlsx(temp, request);
             var imported = new ReportImportService().LoadXlsx(saved);
@@ -38,6 +43,16 @@ public static class R4SelfTest
             Check(Math.Abs(imported.Entries[0].Weight - 100.125) < 0.000001 && imported.Entries[0].Assay == 750,
                 "Imported melt values match saved report");
             Check(imported.Entries[1].Description == "نمونه دوم", "Imported description matches saved report");
+
+            using var zip = ZipFile.OpenRead(saved);
+            Check(Enumerable.Range(1, 5).All(i => zip.GetEntry($"xl/worksheets/sheet{i}.xml") is not null),
+                "Excel report contains all five requested sections");
+            var workbook = zip.GetEntry("xl/workbook.xml");
+            using var reader = new StreamReader(workbook!.Open());
+            var workbookXml = reader.ReadToEnd();
+            Check(workbookXml.Contains("آبشده‌ها") && workbookXml.Contains("افزایش عیار") && workbookXml.Contains("عیار") &&
+                  workbookXml.Contains("محاسبه سریع") && workbookXml.Contains("هزینه عیار"),
+                "Workbook exposes all requested Persian sheet names");
         }
         catch (Exception ex)
         {
