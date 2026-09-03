@@ -36,7 +36,11 @@ public sealed class ReportService
         Write(zip, "xl/workbook.xml", WorkbookXml());
         Write(zip, "xl/_rels/workbook.xml.rels", WorkbookRelsXml());
         Write(zip, "xl/styles.xml", StylesXml());
-        Write(zip, "xl/worksheets/sheet1.xml", SheetXml(valid, totalWeight, average));
+        Write(zip, "xl/worksheets/sheet1.xml", MeltsSheetXml(valid, totalWeight, average));
+        Write(zip, "xl/worksheets/sheet2.xml", SectionSheetXml("افزایش عیار", request.IncreaseAssay));
+        Write(zip, "xl/worksheets/sheet3.xml", SectionSheetXml("عیار", request.Assay));
+        Write(zip, "xl/worksheets/sheet4.xml", SectionSheetXml("محاسبه سریع", request.QuickCalculation));
+        Write(zip, "xl/worksheets/sheet5.xml", SectionSheetXml("هزینه عیار", request.AssayCost));
 
         return path;
     }
@@ -58,22 +62,13 @@ public sealed class ReportService
     private static string NumberCell(string reference, double value, int style = 0) =>
         $"<c r=\"{reference}\" s=\"{style}\"><v>{Num(value)}</v></c>";
 
-    private static string SheetXml(IReadOnlyList<ReportEntry> entries, double totalWeight, double average)
+    private static string MeltsSheetXml(IReadOnlyList<ReportEntry> entries, double totalWeight, double average)
     {
-        var sb = new StringBuilder(8192);
-        sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
-        sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
-        sb.Append("<sheetViews><sheetView workbookViewId=\"0\" rightToLeft=\"1\"/></sheetViews>");
+        var sb = BeginSheet();
         sb.Append("<cols><col min=\"1\" max=\"1\" width=\"8\" customWidth=\"1\"/><col min=\"2\" max=\"3\" width=\"16\" customWidth=\"1\"/><col min=\"4\" max=\"4\" width=\"38\" customWidth=\"1\"/><col min=\"5\" max=\"5\" width=\"24\" customWidth=\"1\"/></cols>");
         sb.Append("<sheetData>");
-
-        sb.Append("<row r=\"1\" ht=\"26\" customHeight=\"1\">");
-        sb.Append(TextCell("A1", "GOLD BAR - گزارش آبشده‌ها", 2));
-        sb.Append("</row>");
-        sb.Append("<row r=\"2\">");
-        sb.Append(TextCell("A2", $"تاریخ ذخیره: {DateTime.Now:yyyy/MM/dd HH:mm:ss}"));
-        sb.Append("</row>");
-
+        sb.Append($"<row r=\"1\" ht=\"26\" customHeight=\"1\">{TextCell("A1", "GOLD BAR - گزارش آبشده‌ها", 2)}</row>");
+        sb.Append($"<row r=\"2\">{TextCell("A2", $"تاریخ ذخیره: {DateTime.Now:yyyy/MM/dd HH:mm:ss}")}</row>");
         sb.Append("<row r=\"4\">");
         sb.Append(TextCell("A4", "ردیف", 1));
         sb.Append(TextCell("B4", "وزن (g)", 1));
@@ -95,7 +90,7 @@ public sealed class ReportService
             sb.Append("</row>");
         }
 
-        row += 1;
+        row++;
         sb.Append($"<row r=\"{row}\">{TextCell($"A{row}", "خلاصه", 2)}</row>");
         row++;
         sb.Append($"<row r=\"{row}\">{TextCell($"A{row}", "تعداد آبشده‌ها", 1)}{NumberCell($"B{row}", entries.Count)}</row>");
@@ -103,9 +98,42 @@ public sealed class ReportService
         sb.Append($"<row r=\"{row}\">{TextCell($"A{row}", "وزن کل (g)", 1)}{NumberCell($"B{row}", totalWeight)}</row>");
         row++;
         sb.Append($"<row r=\"{row}\">{TextCell($"A{row}", "عیار میانگین (‰)", 1)}{NumberCell($"B{row}", average)}</row>");
+        sb.Append("</sheetData></worksheet>");
+        return sb.ToString();
+    }
+
+    private static string SectionSheetXml(string title, ReportSection? section)
+    {
+        var fields = section?.Fields ?? [];
+        var sb = BeginSheet();
+        sb.Append("<cols><col min=\"1\" max=\"1\" width=\"34\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"24\" customWidth=\"1\"/><col min=\"3\" max=\"3\" width=\"18\" customWidth=\"1\"/></cols>");
+        sb.Append("<sheetData>");
+        sb.Append($"<row r=\"1\" ht=\"26\" customHeight=\"1\">{TextCell("A1", $"GOLD BAR - {title}", 2)}</row>");
+        sb.Append($"<row r=\"2\">{TextCell("A2", $"تاریخ ذخیره: {DateTime.Now:yyyy/MM/dd HH:mm:ss}")}</row>");
+        sb.Append($"<row r=\"4\">{TextCell("A4", "عنوان", 1)}{TextCell("B4", "مقدار", 1)}{TextCell("C4", "واحد", 1)}</row>");
+
+        var row = 5;
+        foreach (var field in fields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Label) && string.IsNullOrWhiteSpace(field.Value)) continue;
+            sb.Append($"<row r=\"{row}\">{TextCell($"A{row}", field.Label)}{TextCell($"B{row}", field.Value)}{TextCell($"C{row}", field.Unit)}</row>");
+            row++;
+        }
+
+        if (row == 5)
+            sb.Append($"<row r=\"5\">{TextCell("A5", "اطلاعاتی برای این بخش ثبت نشده است.")}</row>");
 
         sb.Append("</sheetData></worksheet>");
         return sb.ToString();
+    }
+
+    private static StringBuilder BeginSheet()
+    {
+        var sb = new StringBuilder(8192);
+        sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+        sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+        sb.Append("<sheetViews><sheetView workbookViewId=\"0\" rightToLeft=\"1\"/></sheetViews>");
+        return sb;
     }
 
     private static string ContentTypesXml() => """
@@ -115,6 +143,10 @@ public sealed class ReportService
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>
 """;
@@ -129,7 +161,13 @@ public sealed class ReportService
     private static string WorkbookXml() => """
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="گزارش آبشده‌ها" sheetId="1" r:id="rId1"/></sheets>
+  <sheets>
+    <sheet name="آبشده‌ها" sheetId="1" r:id="rId1"/>
+    <sheet name="افزایش عیار" sheetId="2" r:id="rId2"/>
+    <sheet name="عیار" sheetId="3" r:id="rId3"/>
+    <sheet name="محاسبه سریع" sheetId="4" r:id="rId4"/>
+    <sheet name="هزینه عیار" sheetId="5" r:id="rId5"/>
+  </sheets>
 </workbook>
 """;
 
@@ -137,7 +175,11 @@ public sealed class ReportService
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet5.xml"/>
+  <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>
 """;
 
