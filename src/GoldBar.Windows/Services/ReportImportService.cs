@@ -19,12 +19,31 @@ public sealed class ReportImportService
             throw new InvalidOperationException("فقط فایل گزارش Excel با پسوند xlsx قابل وارد کردن است.");
 
         using var zip = ZipFile.OpenRead(path);
-        var sheet = zip.GetEntry("xl/worksheets/sheet1.xml")
-            ?? throw new InvalidDataException("ساختار فایل گزارش معتبر نیست.");
+        var result = new ReportRequest();
+
+        LoadMelts(zip, result);
+        result.IncreaseAssay = LoadSection(zip, "xl/worksheets/sheet2.xml");
+        result.Assay = LoadSection(zip, "xl/worksheets/sheet3.xml");
+        result.QuickCalculation = LoadSection(zip, "xl/worksheets/sheet4.xml");
+        result.AssayCost = LoadSection(zip, "xl/worksheets/sheet5.xml");
+
+        var hasSectionData = result.IncreaseAssay.Fields.Count > 0 ||
+                             result.Assay.Fields.Count > 0 ||
+                             result.QuickCalculation.Fields.Count > 0 ||
+                             result.AssayCost.Fields.Count > 0;
+        if (result.Entries.Count == 0 && !hasSectionData)
+            throw new InvalidDataException("هیچ اطلاعات معتبری داخل فایل گزارش پیدا نشد.");
+
+        return result;
+    }
+
+    private static void LoadMelts(ZipArchive zip, ReportRequest result)
+    {
+        var sheet = zip.GetEntry("xl/worksheets/sheet1.xml");
+        if (sheet is null) return;
+
         using var stream = sheet.Open();
         var doc = XDocument.Load(stream);
-
-        var result = new ReportRequest();
         foreach (var row in doc.Descendants(Ns + "row"))
         {
             var cells = row.Elements(Ns + "c").ToDictionary(CellColumn, CellValue, StringComparer.OrdinalIgnoreCase);
@@ -36,20 +55,40 @@ public sealed class ReportImportService
             if (!(weight > 0) || !(assay > 0 && assay <= 1000))
                 continue;
 
-            var created = NormalizeCreatedAt(cells.GetValueOrDefault("E"));
             result.Entries.Add(new ReportEntry
             {
                 Id = Guid.NewGuid().ToString("N"),
                 Weight = weight,
                 Assay = assay,
                 Description = cells.GetValueOrDefault("D") ?? string.Empty,
-                CreatedAt = created
+                CreatedAt = NormalizeCreatedAt(cells.GetValueOrDefault("E"))
             });
         }
+    }
 
-        if (result.Entries.Count == 0)
-            throw new InvalidDataException("هیچ آبشده معتبری داخل فایل گزارش پیدا نشد.");
-        return result;
+    private static ReportSection LoadSection(ZipArchive zip, string entryName)
+    {
+        var section = new ReportSection();
+        var sheet = zip.GetEntry(entryName);
+        if (sheet is null) return section; // Backward compatibility with old one-sheet reports.
+
+        using var stream = sheet.Open();
+        var doc = XDocument.Load(stream);
+        foreach (var row in doc.Descendants(Ns + "row"))
+        {
+            var rowNumber = (int?)row.Attribute("r") ?? 0;
+            if (rowNumber < 5) continue;
+
+            var cells = row.Elements(Ns + "c").ToDictionary(CellColumn, CellValue, StringComparer.OrdinalIgnoreCase);
+            var label = (cells.GetValueOrDefault("A") ?? string.Empty).Trim();
+            var value = (cells.GetValueOrDefault("B") ?? string.Empty).Trim();
+            var unit = (cells.GetValueOrDefault("C") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(label) && string.IsNullOrWhiteSpace(value)) continue;
+            if (label.Contains("اطلاعاتی برای این بخش", StringComparison.OrdinalIgnoreCase)) continue;
+
+            section.Fields.Add(new ReportField { Label = label, Value = value, Unit = unit });
+        }
+        return section;
     }
 
     private static string CellColumn(XElement cell)
