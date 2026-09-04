@@ -13,6 +13,9 @@ on:
       - '.github/workflows/windows-build.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -132,9 +135,6 @@ jobs:
           $up = Start-Process -FilePath $installedExe -ArgumentList '--ui-self-test' -Wait -PassThru
           if (Test-Path $result) { Write-Host 'INSTALLED UI TEST RESULT:'; Get-Content $result -Raw | Write-Host }
           if ($up.ExitCode -ne 0) { throw "Installed UI self-test failed with exit code $($up.ExitCode)" }
-
-          # Verify that a real uninstall removes the registered credential so the next
-          # installation starts with registration again.
           $credentialDir = Join-Path $env:LOCALAPPDATA 'GoldBar'
           $credential = Join-Path $credentialDir 'credentials.json'
           New-Item -ItemType Directory -Path $credentialDir -Force | Out-Null
@@ -152,10 +152,26 @@ jobs:
           $setup = Join-Path $PWD 'src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe'
           Get-FileHash $setup -Algorithm SHA256 | Format-List
 
-      - name: Upload installer
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: GoldBar-Windows-Installer-v2.0.0-r12
           path: src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish final GitHub release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.0-r12-final
+          name: GOLD BAR v2.0.0 R12 Final
+          body: |
+            Final production release of GOLD BAR for Windows.
+
+            Includes full five-section Excel save/restore, complete report replacement import, assay tools, quick calculations, assay cost, gold/silver quote settings, scale integration, and tested Windows installer.
+
+            Build is validated by compiled self-test, UI/calculation tests, installer install/retest, uninstall reset, and SHA256 generation.
+          files: src/GoldBar.Windows/Installer/Output/GoldBar-Setup-v2.0.0-r12.exe
+          make_latest: true
+          overwrite_files: true
