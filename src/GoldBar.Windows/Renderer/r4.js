@@ -25,6 +25,7 @@
   let importInstalled = false;
   let hiddenMeltsInstalled = false;
   let topImportOverrideInstalled = false;
+  let restoreObserver = null;
   let probeWrapped = false;
 
   function r4Request(action, payload = null) {
@@ -151,6 +152,46 @@
 
   window.__goldbarApplyImportedReport = applyImportedReport;
 
+  function readSnapshot() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(SNAPSHOT_KEY) || '{}');
+      return value && typeof value === 'object' ? value : {};
+    } catch { return {}; }
+  }
+
+  function restoreImportedInputs() {
+    const state = readSnapshot();
+    let changed = false;
+    Object.keys(state).forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || !('value' in el)) return;
+      const desired = String(state[id] ?? '');
+      if (String(el.value) === desired) return;
+      el.value = desired;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      changed = true;
+    });
+    if (changed) setTimeout(() => window.__goldbarRecalculate?.(), 0);
+    return changed;
+  }
+
+  function installRestoreObserver() {
+    if (restoreObserver) return true;
+    const host = $('#pageHost');
+    if (!host) return false;
+    restoreObserver = new MutationObserver(() => setTimeout(restoreImportedInputs, 0));
+    restoreObserver.observe(host, { childList: true, subtree: true });
+    document.addEventListener('click', event => {
+      if (!event.target?.closest?.('.nav-item')) return;
+      setTimeout(restoreImportedInputs, 0);
+      setTimeout(restoreImportedInputs, 80);
+      setTimeout(restoreImportedInputs, 220);
+    }, true);
+    restoreImportedInputs();
+    return true;
+  }
+
   async function importReport() {
     try {
       const result = await r4Request('report:import');
@@ -266,7 +307,8 @@
         bridgeImport,
         registerNavPresent: Boolean(registerNav),
         fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
-        topImportOverrideInstalled
+        topImportOverrideInstalled,
+        restoreObserverInstalled: Boolean(restoreObserver)
       };
       r4.ok = Object.values(r4).every(Boolean);
       return { ...base, r4, ok: Boolean(base?.ok && r4.ok) };
@@ -288,16 +330,18 @@
     }
     installTopImportOverride();
     installNavigationMerge();
+    installRestoreObserver();
     updateVersion();
     wrapProbe();
     if (!probeWrapped && attempt < 30) setTimeout(() => { wrapProbe(); }, 120);
     window.__goldbarR4Probe = () => ({
-      ok: hiddenMeltsInstalled && registerCombinedInstalled && topImportOverrideInstalled && typeof window.__goldbarApplyImportedReport === 'function',
+      ok: hiddenMeltsInstalled && registerCombinedInstalled && topImportOverrideInstalled && Boolean(restoreObserver) && typeof window.__goldbarApplyImportedReport === 'function',
       hiddenMeltsInstalled,
       registerCombinedInstalled,
       importInstalled,
       fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
-      topImportOverrideInstalled
+      topImportOverrideInstalled,
+      restoreObserverInstalled: Boolean(restoreObserver)
     });
   }
 
