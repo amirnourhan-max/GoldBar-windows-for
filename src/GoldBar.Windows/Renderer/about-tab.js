@@ -165,6 +165,8 @@
     };
   }
 
+  window.__goldbarBuildReportSections = buildReportSections;
+
   function installReportWrapper() {
     const bridge=window.goldbar;
     if (!bridge || bridge.__finalReportWrapped || typeof bridge.saveReport!=='function') return false;
