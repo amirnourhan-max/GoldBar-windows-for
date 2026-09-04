@@ -246,7 +246,11 @@ public partial class MainWindow
             ok = true,
             path = dialog.FileName,
             count = request.Entries.Count,
-            entries = request.Entries
+            entries = request.Entries,
+            increaseAssay = request.IncreaseAssay,
+            assay = request.Assay,
+            quickCalculation = request.QuickCalculation,
+            assayCost = request.AssayCost
         });
     }
 

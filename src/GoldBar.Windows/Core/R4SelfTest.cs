@@ -43,6 +43,14 @@ public static class R4SelfTest
             Check(Math.Abs(imported.Entries[0].Weight - 100.125) < 0.000001 && imported.Entries[0].Assay == 750,
                 "Imported melt values match saved report");
             Check(imported.Entries[1].Description == "نمونه دوم", "Imported description matches saved report");
+            Check(imported.IncreaseAssay.Fields.Any(f => f.Label == "شمش مورد نیاز" && f.Value == "12.3" && f.Unit == "g"),
+                "Excel report imports increase-assay section");
+            Check(imported.Assay.Fields.Any(f => f.Label == "کل بار مورد نیاز" && f.Value == "22.4" && f.Unit == "g"),
+                "Excel report imports assay section");
+            Check(imported.QuickCalculation.Fields.Any(f => f.Label == "طلای 995" && f.Value == "294.32" && f.Unit == "g"),
+                "Excel report imports quick-calculation section");
+            Check(imported.AssayCost.Fields.Any(f => f.Label == "جمع هزینه عیار" && f.Value == "1.25" && f.Unit == "g طلا"),
+                "Excel report imports assay-cost section");
 
             using var zip = ZipFile.OpenRead(saved);
             Check(Enumerable.Range(1, 5).All(i => zip.GetEntry($"xl/worksheets/sheet{i}.xml") is not null),

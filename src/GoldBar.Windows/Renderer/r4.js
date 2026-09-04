@@ -4,6 +4,10 @@
   const ENTRY_KEY = 'goldbar.windows.entries.v2';
   const SESSION_KEY = 'goldbar.windows.r4.session';
   const OPEN_REGISTER_KEY = 'goldbar.windows.r4.openRegister';
+  const SNAPSHOT_KEY = 'goldbar.windows.final.reportSnapshot';
+  const COST_KEY = 'goldbar.windows.r12.costQuote';
+  const ASSAY_RESET_KEY = 'goldbar.windows.r11.assayPageReset';
+  const QUICK_RESET_KEY = 'goldbar.windows.r11.quickPageReset';
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
   const selfTest = Boolean(window.__goldbarR4SelfTest);
@@ -20,6 +24,8 @@
   let registerCombinedInstalled = false;
   let importInstalled = false;
   let hiddenMeltsInstalled = false;
+  let topImportOverrideInstalled = false;
+  let restoreObserver = null;
   let probeWrapped = false;
 
   function r4Request(action, payload = null) {
@@ -85,19 +91,126 @@
     document.head.appendChild(style);
   }
 
+  function fields(section) {
+    return Array.isArray(section?.fields) ? section.fields : [];
+  }
+
+  function fieldValue(section, label, unit = null) {
+    const item = fields(section).find(f => String(f?.label || '').trim() === label && (unit == null || String(f?.unit || '').trim() === unit));
+    return item ? String(item.value ?? '') : '';
+  }
+
+  function storageNumber(value) {
+    const fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
+    return String(value ?? '')
+      .replace(/[۰-۹]/g, d => String(fa.indexOf(d)))
+      .replace(/[٠-٩]/g, d => String(ar.indexOf(d)))
+      .replace(/[,٬،\s]/g, '')
+      .trim();
+  }
+
+  function applyImportedReport(result) {
+    const entries = Array.isArray(result?.entries) ? result.entries : [];
+    localStorage.setItem(ENTRY_KEY, JSON.stringify(entries));
+
+    const snapshot = {
+      r7IncreaseTarget: storageNumber(fieldValue(result?.increaseAssay, 'عیار هدف')),
+      r7BarAssay: storageNumber(fieldValue(result?.increaseAssay, 'عیار شمش')),
+      r7AlloyTarget: storageNumber(fieldValue(result?.assay, 'عیار هدف')),
+      r7SilverPercent: storageNumber(fieldValue(result?.assay, 'درصد نقره')),
+      splitBaseWin: storageNumber(fieldValue(result?.quickCalculation, 'عدد پایه تقسیم')),
+      r7Pct995: storageNumber(fieldValue(result?.quickCalculation, 'درصد طلای 995')),
+      r7Pct750: storageNumber(fieldValue(result?.quickCalculation, 'درصد طلای 750')),
+      corrWeightWin: storageNumber(fieldValue(result?.quickCalculation, 'وزن پایه اصلاح افت عیار')),
+      corrTargetWin: storageNumber(fieldValue(result?.quickCalculation, 'عیار پایه')),
+      corrDropWin: storageNumber(fieldValue(result?.quickCalculation, 'افت عیار'))
+    };
+    sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+
+    const cost = {
+      goldQuote: storageNumber(fieldValue(result?.assayCost, 'مظنه طلا - هر مثقال')),
+      silverQuote: storageNumber(fieldValue(result?.assayCost, 'مظنه نقره - هر گرم')),
+      barDifference: storageNumber(fieldValue(result?.assayCost, 'فرق شمش', 'g/kg')),
+      alloyPrice: storageNumber(fieldValue(result?.assayCost, 'قیمت هر گرم بار')),
+      cutchPrice: storageNumber(fieldValue(result?.assayCost, 'قیمت هر گرم کچ')),
+      resinPrice: storageNumber(fieldValue(result?.assayCost, 'قیمت هر گرم رزین')),
+      cutchWeight: storageNumber(fieldValue(result?.assayCost, 'مقدار کچ')),
+      resinWeight: storageNumber(fieldValue(result?.assayCost, 'مقدار رزین'))
+    };
+    sessionStorage.setItem(COST_KEY, JSON.stringify(cost));
+
+    sessionStorage.setItem(ASSAY_RESET_KEY, '1');
+    sessionStorage.setItem(QUICK_RESET_KEY, '1');
+    sessionStorage.setItem(SESSION_KEY, '1');
+    sessionStorage.setItem(OPEN_REGISTER_KEY, '1');
+    return entries.length;
+  }
+
+  window.__goldbarApplyImportedReport = applyImportedReport;
+
+  function readSnapshot() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(SNAPSHOT_KEY) || '{}');
+      return value && typeof value === 'object' ? value : {};
+    } catch { return {}; }
+  }
+
+  function restoreImportedInputs() {
+    const state = readSnapshot();
+    let changed = false;
+    Object.keys(state).forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || !('value' in el)) return;
+      const desired = String(state[id] ?? '');
+      if (String(el.value) === desired) return;
+      el.value = desired;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      changed = true;
+    });
+    if (changed) setTimeout(() => window.__goldbarRecalculate?.(), 0);
+    return changed;
+  }
+
+  function installRestoreObserver() {
+    if (restoreObserver) return true;
+    const target = $('#pageHost') || $('.center');
+    if (!target) return false;
+    restoreObserver = new MutationObserver(() => setTimeout(restoreImportedInputs, 0));
+    restoreObserver.observe(target, { childList: true, subtree: true });
+    document.addEventListener('click', event => {
+      if (!event.target?.closest?.('.nav-item')) return;
+      setTimeout(restoreImportedInputs, 0);
+      setTimeout(restoreImportedInputs, 80);
+      setTimeout(restoreImportedInputs, 220);
+    }, true);
+    restoreImportedInputs();
+    return true;
+  }
+
   async function importReport() {
     try {
       const result = await r4Request('report:import');
       if (!result?.ok) return;
-      const entries = Array.isArray(result.entries) ? result.entries : [];
-      localStorage.setItem(ENTRY_KEY, JSON.stringify(entries));
-      sessionStorage.setItem(SESSION_KEY, '1');
-      sessionStorage.setItem(OPEN_REGISTER_KEY, '1');
-      toast(`${entries.length} آبشده از گزارش وارد شد`);
+      const count = applyImportedReport(result);
+      toast(`تمام اطلاعات گزارش جایگزین شد (${count} آبشده)`);
       setTimeout(() => location.reload(), 180);
     } catch (error) {
       toast(error?.message || 'خطا در وارد کردن گزارش');
     }
+  }
+
+  function installTopImportOverride() {
+    const btn = $('#importReportBtn');
+    if (!btn || btn.dataset.r4FullImport === '1') return false;
+    btn.dataset.r4FullImport = '1';
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      importReport();
+    }, true);
+    topImportOverrideInstalled = true;
+    return true;
   }
 
   function ensureImportToolbar() {
@@ -107,7 +220,7 @@
     const toolbar = document.createElement('div');
     toolbar.id = 'r4ImportToolbar';
     toolbar.className = 'r4-import-toolbar';
-    toolbar.innerHTML = '<button class="r4-import-btn" id="r4ImportReport">وارد کردن گزارش</button><span>برای بازگرداندن آبشده‌های ذخیره‌شده، فایل گزارش Excel را انتخاب کنید.</span>';
+    toolbar.innerHTML = '<button class="r4-import-btn" id="r4ImportReport">وارد کردن گزارش</button><span>تمام اطلاعات کاری فعلی با اطلاعات فایل Excel جایگزین می‌شود.</span>';
     const heading = section.querySelector('h2');
     if (heading?.nextSibling) section.insertBefore(toolbar, heading.nextSibling);
     else section.prepend(toolbar);
@@ -188,7 +301,10 @@
         registerCombinedInstalled,
         importInstalled: importInstalled || true,
         bridgeImport,
-        registerNavPresent: Boolean(registerNav)
+        registerNavPresent: Boolean(registerNav),
+        fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
+        topImportOverrideInstalled,
+        restoreObserverInstalled: Boolean(restoreObserver)
       };
       r4.ok = Object.values(r4).every(Boolean);
       return { ...base, r4, ok: Boolean(base?.ok && r4.ok) };
@@ -208,15 +324,20 @@
       if (attempt < 30) setTimeout(() => init(attempt + 1), 100);
       return;
     }
+    installTopImportOverride();
     installNavigationMerge();
+    installRestoreObserver();
     updateVersion();
     wrapProbe();
     if (!probeWrapped && attempt < 30) setTimeout(() => { wrapProbe(); }, 120);
     window.__goldbarR4Probe = () => ({
-      ok: hiddenMeltsInstalled && registerCombinedInstalled,
+      ok: hiddenMeltsInstalled && registerCombinedInstalled && topImportOverrideInstalled && Boolean(restoreObserver) && typeof window.__goldbarApplyImportedReport === 'function',
       hiddenMeltsInstalled,
       registerCombinedInstalled,
-      importInstalled
+      importInstalled,
+      fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
+      topImportOverrideInstalled,
+      restoreObserverInstalled: Boolean(restoreObserver)
     });
   }
 
