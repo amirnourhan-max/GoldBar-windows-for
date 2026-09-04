@@ -111,8 +111,6 @@
 
   function applyImportedReport(result) {
     const entries = Array.isArray(result?.entries) ? result.entries : [];
-
-    // Replace, never merge, every piece of report-backed working state.
     localStorage.setItem(ENTRY_KEY, JSON.stringify(entries));
 
     const snapshot = {
@@ -141,12 +139,10 @@
     };
     sessionStorage.setItem(COST_KEY, JSON.stringify(cost));
 
-    // Preserve the restored values when R11 first opens dynamic calculation pages.
     sessionStorage.setItem(ASSAY_RESET_KEY, '1');
     sessionStorage.setItem(QUICK_RESET_KEY, '1');
     sessionStorage.setItem(SESSION_KEY, '1');
     sessionStorage.setItem(OPEN_REGISTER_KEY, '1');
-
     return entries.length;
   }
 
@@ -178,10 +174,10 @@
 
   function installRestoreObserver() {
     if (restoreObserver) return true;
-    const host = $('#pageHost');
-    if (!host) return false;
+    const target = $('#pageHost') || $('.center');
+    if (!target) return false;
     restoreObserver = new MutationObserver(() => setTimeout(restoreImportedInputs, 0));
-    restoreObserver.observe(host, { childList: true, subtree: true });
+    restoreObserver.observe(target, { childList: true, subtree: true });
     document.addEventListener('click', event => {
       if (!event.target?.closest?.('.nav-item')) return;
       setTimeout(restoreImportedInputs, 0);
