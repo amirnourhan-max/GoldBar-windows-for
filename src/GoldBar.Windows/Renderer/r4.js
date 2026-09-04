@@ -24,6 +24,7 @@
   let registerCombinedInstalled = false;
   let importInstalled = false;
   let hiddenMeltsInstalled = false;
+  let topImportOverrideInstalled = false;
   let probeWrapped = false;
 
   function r4Request(action, payload = null) {
@@ -162,6 +163,19 @@
     }
   }
 
+  function installTopImportOverride() {
+    const btn = $('#importReportBtn');
+    if (!btn || btn.dataset.r4FullImport === '1') return false;
+    btn.dataset.r4FullImport = '1';
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      importReport();
+    }, true);
+    topImportOverrideInstalled = true;
+    return true;
+  }
+
   function ensureImportToolbar() {
     const host = $('#pageHost');
     const section = host?.querySelector('.page-panel');
@@ -251,7 +265,8 @@
         importInstalled: importInstalled || true,
         bridgeImport,
         registerNavPresent: Boolean(registerNav),
-        fullImportApply: typeof window.__goldbarApplyImportedReport === 'function'
+        fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
+        topImportOverrideInstalled
       };
       r4.ok = Object.values(r4).every(Boolean);
       return { ...base, r4, ok: Boolean(base?.ok && r4.ok) };
@@ -271,16 +286,18 @@
       if (attempt < 30) setTimeout(() => init(attempt + 1), 100);
       return;
     }
+    installTopImportOverride();
     installNavigationMerge();
     updateVersion();
     wrapProbe();
     if (!probeWrapped && attempt < 30) setTimeout(() => { wrapProbe(); }, 120);
     window.__goldbarR4Probe = () => ({
-      ok: hiddenMeltsInstalled && registerCombinedInstalled && typeof window.__goldbarApplyImportedReport === 'function',
+      ok: hiddenMeltsInstalled && registerCombinedInstalled && topImportOverrideInstalled && typeof window.__goldbarApplyImportedReport === 'function',
       hiddenMeltsInstalled,
       registerCombinedInstalled,
       importInstalled,
-      fullImportApply: typeof window.__goldbarApplyImportedReport === 'function'
+      fullImportApply: typeof window.__goldbarApplyImportedReport === 'function',
+      topImportOverrideInstalled
     });
   }
 
