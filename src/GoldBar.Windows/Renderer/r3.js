@@ -102,7 +102,7 @@
   }
 
   function reportPayload() {
-    return {
+    const base = {
       entries: readEntries()
         .filter(e => Number(e.weight) > 0 && Number(e.assay) > 0)
         .map(e => ({
@@ -113,6 +113,16 @@
           createdAt: formatReportDate(e.createdAt)
         }))
     };
+
+    const buildSections = window.__goldbarBuildReportSections;
+    if (typeof buildSections !== 'function') return base;
+
+    try {
+      return { ...base, ...buildSections(base) };
+    } catch (error) {
+      console.error('GoldBar report section collection failed', error);
+      return base;
+    }
   }
 
   async function saveReport(button = null) {
